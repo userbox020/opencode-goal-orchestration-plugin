@@ -317,7 +317,7 @@ export class RuntimeConfig {
   }
 
   get autoUpdate(): boolean {
-    return this.pluginConfig?.autoUpdate ?? true;
+    return this.pluginConfig?.autoUpdate ?? false;
   }
 
   get stripOrchestratorModel(): boolean {

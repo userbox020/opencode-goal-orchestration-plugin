@@ -137,7 +137,7 @@ Presets can also be switched at runtime without restarting using the `/preset` c
 | `acpAgents.<name>.timeoutMs` | integer | `0` | Timeout for a single ACP run in milliseconds. `0` disables the timeout so external agents can run indefinitely. Finite values can be up to `2147483647`ms (~24.8 days) See [ACP-connected agents](#acp-connected-agents). |
 | `disabled_agents` | string[] | `["observer"]` | Agent names to disable globally. Set to `[]` to enable Observer; this is global, not per-preset See [Custom Agents](#custom-agents). |
 | `image_routing` | `"auto"` \| `"direct"` | omitted (legacy conditional) | Optional. When omitted, resolves to `"auto"` if Observer is enabled, otherwise `"direct"`. Explicit `"auto"` requires Observer enabled and saves image attachments to disk before nudging delegation to @observer. `"direct"`: always pass images to the orchestrator. |
-| `autoUpdate` | boolean | `true` | Automatically install plugin updates in the background; set to `false` for notification-only mode |
+| `autoUpdate` | boolean | `false` | Disabled by default in this source fork. Setting `true` explicitly opts into inherited updater behavior; source-fork users should leave it `false` and update manually. |
 | `multiplexer.type` | string | `"none"` | Multiplexer mode: `auto`, `tmux`, `zellij`, `herdr`, `cmux`, `kitty`, or `none` See [Multiplexer Integration](multiplexer-integration.md). |
 | `multiplexer.layout` | string | `"main-vertical"` | Layout preset: `main-vertical`, `main-horizontal`, `tiled`, `even-horizontal`, `even-vertical`. Tmux applies full layouts; Zellij and Herdr map supported layouts to split directions; cmux maintains a right-hand agent column See [Multiplexer Integration](multiplexer-integration.md). |
 | `multiplexer.main_pane_size` | number | `60` | Main pane size as percentage (20–80) for tmux main layouts; ignored by Zellij, Herdr, and cmux See [Multiplexer Integration](multiplexer-integration.md). |
@@ -262,8 +262,10 @@ subprocess.
 
 ### Manual Update Mode
 
-Set `autoUpdate` to `false` if you want update notifications without automatic
-`bun install` runs.
+`autoUpdate` defaults to `false` in this source fork. Source-fork users should
+leave it disabled and follow the
+[README source update steps](../README.md#install-this-fork-from-source)
+manually.
 
 ```jsonc
 {
@@ -271,17 +273,8 @@ Set `autoUpdate` to `false` if you want update notifications without automatic
 }
 ```
 
-With `autoUpdate` set to `false`, this becomes notification-only mode: you'll
-see that a new version is available, but the plugin won't install it
-automatically.
-
-Auto-update never crosses major versions. For example, a 1.x install can
-auto-update to a newer 1.x release, but it won't auto-install 2.x. When a newer
-major is available, the plugin shows a migration command instead.
-
-> Pinned plugin entries in `opencode.json` (for example
-> `"oh-my-opencode-slim@1.0.1"`) are the true version lock. Those stay pinned
-> regardless of `autoUpdate`.
+Setting `autoUpdate` to `true` explicitly opts into the inherited automatic
+updater. That is not the supported update path for this source-only fork.
 
 ### Background Job Management
 

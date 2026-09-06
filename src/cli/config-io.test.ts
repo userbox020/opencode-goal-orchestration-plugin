@@ -487,8 +487,9 @@ describe('config-io', () => {
 
     const saved = JSON.parse(readFileSync(litePath, 'utf-8'));
     expect(saved.$schema).toBe(
-      'https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json',
+      'https://raw.githubusercontent.com/userbox020/opencode-goal-orchestration-plugin/v0.1.0-preview.0/oh-my-opencode-slim.schema.json',
     );
+    expect(saved.autoUpdate).toBe(false);
     expect(saved.preset).toBe('openai');
     expect(saved.presets.openai).toBeDefined();
     expect(saved.presets['opencode-go']).toBeDefined();

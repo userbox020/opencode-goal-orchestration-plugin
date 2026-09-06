@@ -1,7 +1,8 @@
 {
   "name": "oh-my-opencode-slim",
-  "version": "2.2.17",
-  "description": "Lightweight agent orchestration plugin for OpenCode - a slimmed-down fork of oh-my-opencode",
+  "version": "0.1.0-preview.0",
+  "private": true,
+  "description": "Unofficial source-only oh-my-opencode-slim replacement fork with integrated OpenCode V1 Goal orchestration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -35,12 +36,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/alvinunreal/oh-my-opencode-slim"
+    "url": "https://github.com/userbox020/opencode-goal-orchestration-plugin"
   },
   "bugs": {
-    "url": "https://github.com/alvinunreal/oh-my-opencode-slim/issues"
+    "url": "https://github.com/userbox020/opencode-goal-orchestration-plugin/issues"
   },
-  "homepage": "https://github.com/alvinunreal/oh-my-opencode-slim#readme",
+  "homepage": "https://github.com/userbox020/opencode-goal-orchestration-plugin#readme",
   "files": [
     "dist",
     "src/companion/companion-manifest.json",
@@ -74,13 +75,7 @@
     "format": "biome format . --write",
     "check": "biome check --write .",
     "check:ci": "biome check .",
-    "dev": "bun run build && opencode",
-    "prepublishOnly": "bun run build",
-    "release:patch": "npm version patch && git push --follow-tags && npm publish",
-    "release:minor": "npm version minor && git push --follow-tags && npm publish",
-    "release:major": "npm version major && git push --follow-tags && npm publish",
-    "release:beta": "npm version premajor --preid beta && git push --follow-tags && npm publish --tag beta",
-    "release:beta:next": "npm version prerelease --preid beta && git push --follow-tags && npm publish --tag beta"
+    "dev": "bun run build && opencode"
   },
   "dependencies": {
     "@ast-grep/cli": "^0.44.1",

@@ -131,7 +131,7 @@ describe('RuntimeConfig', () => {
     expect(runtime.acpAgents).toEqual({});
     expect(runtime.companion).toBeUndefined();
     expect(runtime.council).toBeUndefined();
-    expect(runtime.autoUpdate).toBe(true);
+    expect(runtime.autoUpdate).toBe(false);
     expect(runtime.stripOrchestratorModel).toBe(false);
     expect(runtime.setDefaultAgent).toBe(true);
     expect(runtime.compactSidebar).toBe(true);
@@ -148,7 +148,7 @@ describe('RuntimeConfig', () => {
   test('explicit config values override defaults', () => {
     resetRegistry();
     const runtime = RuntimeConfig.init(DIRECTORY, {
-      autoUpdate: false,
+      autoUpdate: true,
       stripOrchestratorModel: true,
       setDefaultAgent: false,
       compactSidebar: false,
@@ -163,7 +163,7 @@ describe('RuntimeConfig', () => {
       backgroundJobs: { maxSessionsPerAgent: 7 },
       multiplexer: { type: 'tmux', layout: 'main-vertical' },
     });
-    expect(runtime.autoUpdate).toBe(false);
+    expect(runtime.autoUpdate).toBe(true);
     expect(runtime.stripOrchestratorModel).toBe(true);
     expect(runtime.setDefaultAgent).toBe(false);
     expect(runtime.compactSidebar).toBe(false);

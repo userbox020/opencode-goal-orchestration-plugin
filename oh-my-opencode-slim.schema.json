@@ -17,7 +17,7 @@
       "type": "boolean"
     },
     "autoUpdate": {
-      "description": "Disable automatic installation of plugin updates when false. Defaults to true.",
+      "description": "Automatically install plugin updates when true. Defaults to false in this source fork; set true to opt in.",
       "type": "boolean"
     },
     "presets": {

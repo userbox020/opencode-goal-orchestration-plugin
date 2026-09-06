@@ -3,7 +3,7 @@ import { CUSTOM_SKILLS } from './custom-skills';
 import type { InstallConfig } from './types';
 
 const SCHEMA_URL =
-  'https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json';
+  'https://raw.githubusercontent.com/userbox020/opencode-goal-orchestration-plugin/v0.1.0-preview.0/oh-my-opencode-slim.schema.json';
 
 export const GENERATED_PRESETS = ['openai', 'opencode-go'] as const;
 
@@ -80,6 +80,7 @@ export function generateLiteConfig(
 
   const config: Record<string, unknown> = {
     $schema: SCHEMA_URL,
+    autoUpdate: false,
     preset,
     presets: {},
   };

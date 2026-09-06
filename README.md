@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://github.com/alvinunreal/oh-my-opencode-slim/stargazers">
+  <a href="https://github.com/userbox020/opencode-goal-orchestration-plugin/stargazers">
     <img src="img/v2.webp" alt="oh-my-opencode-slim V2 Release" style="border-radius: 10px;">
   </a>
   <h3>✨ oh-my-opencode-slim ✨</h3>
@@ -7,16 +7,15 @@
   <p><i>Seven divine beings emerged from the dawn of code, each an immortal master of their craft,<br>awaiting your command to forge order from chaos and build what was once thought impossible.</i></p>
 
   <p><b>Opencode Multi Agent Suite</b> · Mix any models · Auto delegate tasks</p>
-  <p><sub>by <b>Boring Dystopia Development</b></sub></p>
+  <p><b>Unofficial source-only full replacement fork · V1 Goal integrated</b></p>
+  <p><sub>based on upstream by <b>Boring Dystopia Development</b></sub></p>
   <p>
     <a href="https://boringdystopia.ai/"><img src="https://img.shields.io/badge/boringdystopia.ai-111111?style=for-the-badge&logo=vercel&logoColor=white" alt="boringdystopia.ai"></a>&nbsp;
     <a href="https://x.com/alvinunreal"><img src="https://img.shields.io/badge/X-@alvinunreal-000000?style=for-the-badge&logo=x&logoColor=white" alt="X @alvinunreal"></a>&nbsp;
     <a href="https://t.me/boringdystopiadevelopment"><img src="https://img.shields.io/badge/Telegram-Join%20channel-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Join channel"></a>&nbsp;
   </p>
 
-  <p>
-    <b>English</b> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja-JP.md">日本語</a> | <a href="README.ko-KR.md">한국어</a>
-  </p>
+  <p><b>English is canonical for this fork.</b> Inherited translations do not contain fork-safe install or update instructions.</p>
 
   <p><sub>✦ ✦ ✦</sub></p>
 
@@ -24,9 +23,25 @@
 
 ## What's This Plugin
 
+> [!WARNING]
+> **This is an unofficial, source-only full replacement fork.** It is based on
+> upstream
+> [`oh-my-opencode-slim` v2.2.17 at `7ea8f3e`](https://github.com/alvinunreal/oh-my-opencode-slim/commit/7ea8f3e)
+> and adds integrated **V1-only Goal** orchestration. Load this fork **instead
+> of**, never beside, upstream `oh-my-opencode-slim`. This fork is not endorsed
+> or supported by the upstream project.
+
 oh-my-opencode-slim is an agent orchestration plugin for OpenCode. It includes a built-in team of specialized agents that can scout a codebase, look up fresh documentation, review architecture, handle UI work, and execute well-scoped implementation tasks under one orchestrator.
 
 The main idea is simple: instead of forcing one model to do everything, the plugin routes each part of the job to the agent best suited for it, balancing **quality, speed and cost**. The Orchestrator plans the work graph, dispatches specialists as background tasks, and reconciles their results before continuing.
+
+**Upstream attribution:** This fork remains MIT licensed and preserves the
+upstream project and contributor attribution below.
+
+> [!IMPORTANT]
+> **[Persistent Goal (V1)](docs/goal.md)** adds durable, criterion-driven
+> orchestration with a read-only progress panel and completion backed only by
+> reconciled verifier evidence.
 
 ### ✨ Highlights
 
@@ -85,52 +100,108 @@ Sol to Oracle, and Luna to the fast specialist lanes.
 >
 > \- `xenstar1`
 
-### Quick Start
+## Install This Fork from Source
 
-Copy and paste this prompt to your LLM agent (Claude Code, AmpCode, Cursor, etc.):
-
-
-```
-Install and configure oh-my-opencode-slim: https://raw.githubusercontent.com/alvinunreal/oh-my-opencode-slim/refs/heads/master/README.md
-```
-
-
-### Manual Installation
+This fork is installed from
+[`userbox020/opencode-goal-orchestration-plugin`](https://github.com/userbox020/opencode-goal-orchestration-plugin),
+not from npm. You need **Git**, **Bun**, and **OpenCode**. The validated baseline
+is **Bun 1.4.1** with **OpenCode 1.18.13 V1**.
 
 ```bash
-bunx oh-my-opencode-slim@latest install
-```
-
-The published CLI is a Node-compatible bundle, so `npx` works too if you don't
-have Bun installed:
-
-```bash
-npx oh-my-opencode-slim@latest install
-```
-
-### Run from Master
-
-Use this if you want the latest code, easier bug fixes, or a local setup for
-development and contributions:
-
-```bash
-git clone https://github.com/alvinunreal/oh-my-opencode-slim.git ~/repos/oh-my-opencode-slim
-cd ~/repos/oh-my-opencode-slim
+git clone https://github.com/userbox020/opencode-goal-orchestration-plugin.git
+cd opencode-goal-orchestration-plugin
 bun install
 bun run build
-bun dist/cli/index.js install
+bun dist/cli/index.js install --no-tui --skills=yes --companion=no --background-subagents=yes
 ```
 
-The installer adds the local repo path to the `plugin` array in
-`~/.config/opencode/opencode.json`, so OpenCode loads the plugin from that
-folder. To update later:
+The installer registers the checkout path in OpenCode's `plugin` configuration
+and creates the plugin configuration and generated OpenAI/OpenCode Go presets.
+It is non-destructive when a plugin config already exists. Keep the checkout in
+place: OpenCode loads the fork from that directory.
+
+> [!WARNING]
+> `bunx oh-my-opencode-slim@latest` and
+> `npx oh-my-opencode-slim@latest` install the upstream package, **not this
+> fork**.
+
+Authenticate, refresh the available models, then start OpenCode:
 
 ```bash
-cd ~/repos/oh-my-opencode-slim
-git pull
+opencode auth login
+opencode models --refresh
+```
+
+Enable background specialists with
+`OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` and Exa web search with
+`OPENCODE_ENABLE_EXA`. After the installer updates your shell startup file,
+open a new terminal before starting OpenCode. For a one-shot POSIX launch:
+
+```bash
+OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true OPENCODE_ENABLE_EXA=1 opencode
+```
+
+For the current PowerShell session:
+
+```powershell
+$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = "true"
+$env:OPENCODE_ENABLE_EXA = "1"
+opencode
+```
+
+To update, pull and rebuild the same checkout:
+
+```bash
+cd opencode-goal-orchestration-plugin
+git pull --ff-only
 bun install
 bun run build
 ```
+
+Fully restart OpenCode after installation and after every rebuild so it loads
+the new artifacts. Generated configuration sets `autoUpdate: false`, and the
+runtime default is also off. Leave auto-update disabled for this source fork;
+updates are manual.
+
+## Using Goal
+
+Select **Goal** from OpenCode's primary-agent list. If the session has no Goal,
+your first normal message automatically creates one from that request and opens
+its browser panel. Later Goal messages continue the same Goal; switching away
+and back opens the panel again.
+
+| Command | What it does |
+|---------|--------------|
+| `/goal <objective>` | Create a Goal, or replace a completed/cancelled Goal |
+| `/goal status` | Show the current Goal context and progress |
+| `/goal panel` | Open the read-only browser panel |
+| `/goal pause` | Pause the active Goal |
+| `/goal resume` | Resume a paused Goal and audit evidence received while paused |
+| `/goal revise <objective>` | Revise an active or paused Goal |
+| `/goal clear` | Cancel the current Goal so a new one can be created |
+
+A Goal starts active, may be paused, resumed, or revised, and becomes completed
+only after all required criteria pass verification. Completed and cancelled
+Goals are terminal and are not automatically replaced.
+
+There is deliberately **no manual complete command**. Finished subtasks and
+model or task prose are not proof. Only explicitly assigned verifier evidence
+that matches the current criterion and is canonically reconciled can count
+toward completion. See **[Goal (V1 only)](docs/goal.md)** for the full lifecycle
+and evidence rules.
+
+### Compatibility and Limitations
+
+- Goal runtime support is **V1 only**; V2 has no Goal command or partial Goal
+  behavior. OpenCode **1.18.13 V1** is the tested host baseline.
+- After OpenCode or the plugin restarts, unfinished runtime evidence must be
+  observed and reconciled again. Completed verification proof and progress
+  persist, but do not authorize new runtime work.
+- The panel is localhost-only and read-only. Its access token lives only in
+  memory, so reload it by running `/goal panel` again.
+- Goal does not create or update a Desktop status card.
+- Fork updates are manual: pull, install dependencies, rebuild, and restart
+  OpenCode.
 
 ### Getting Started
 
@@ -140,23 +211,10 @@ The installer generates both OpenAI and OpenCode Go presets, with OpenAI active 
 > Tune the models and agents for your own workflow. The defaults are only a
 > starting point; the plugin is designed for deep flexibility and customization.
 
-To make OpenCode Go active during install, run `bunx oh-my-opencode-slim@latest install --preset=opencode-go` or change the default preset name in `~/.config/opencode/oh-my-opencode-slim.json` after installation.
+To make OpenCode Go active, change the default preset name in
+`~/.config/opencode/oh-my-opencode-slim.json` after installation.
 
-Then:
-
-1. **Log in to the providers you want to use if you haven't already**:
-
-   ```bash
-   opencode auth login
-   ```
-2. **Refresh and list the models OpenCode can see**:
-
-   ```bash
-   opencode models --refresh
-   ```
-3. **Open your plugin config** at `~/.config/opencode/oh-my-opencode-slim.json`
-
-4. **Update the models you want for each agent**
+Open that generated config and update the models you want for each agent.
 
 > [!TIP]
 > It's **recommended** to understand how background orchestration works. The **[Orchestrator prompt](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/agents/orchestrator.ts#L28)** contains the scheduler rules, specialist routing logic, and thresholds for when work should be assigned to background agents. You can always delegate manually by calling a subagent via: `@agentName <task>`
@@ -168,7 +226,8 @@ The default generated configuration includes both `openai` and `opencode-go` pre
 
 ```jsonc
 {
-  "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+  "$schema": "https://raw.githubusercontent.com/userbox020/opencode-goal-orchestration-plugin/v0.1.0-preview.0/oh-my-opencode-slim.schema.json",
+  "autoUpdate": false,
   "preset": "openai",
   "presets": {
     "openai": {
@@ -585,7 +644,7 @@ updated on plugin auto-update; local customizations are preserved.
 
 > [!TIP]
 > To discard local bundled-skill customizations and receive package updates, run
-> `bunx oh-my-opencode-slim install --skills=force`. This deliberately replaces
+> `bun dist/cli/index.js install --skills=force` from the fork checkout. This deliberately replaces
 > installed bundled skills with the package versions.
 
 | Skill | Purpose | Default agent | How to invoke |
@@ -627,7 +686,7 @@ During interactive install, the installer asks whether to enable Companion and
 defaults to `no`. For automation, enable it explicitly with:
 
 ```bash
-bunx oh-my-opencode-slim@latest install --companion=yes
+bun dist/cli/index.js install --companion=yes
 ```
 
 See **[Companion](docs/companion.md)** for configuration, positions, sizes, and
@@ -645,6 +704,7 @@ Use this section as a map: start with installation, then jump to features, confi
 
 | Doc | What it covers |
 |-----|----------------|
+| **[Goal (V1 only)](docs/goal.md)** | Durable goals, lifecycle commands, the read-only panel, and strict verifier evidence |
 | **[Council](docs/council.md)** | Run multiple models in parallel and synthesize a single answer with `@council` |
 | **[Custom Agents](docs/configuration.md#custom-agents)** | Define your own specialists with custom prompts, models, MCP access, and Orchestrator delegation rules |
 | **[ACP Agents](docs/acp-agents.md)** | Connect external ACP-compatible agents such as Claude Code ACP or Gemini ACP as delegatable subagents |
@@ -660,7 +720,7 @@ Use this section as a map: start with installation, then jump to features, confi
 
 | Doc | What it covers |
 |-----|----------------|
-| **[Installation Guide](docs/installation.md)** | Install the plugin, use CLI flags, reset config, and troubleshoot setup |
+| **[Installation Guide](#install-this-fork-from-source)** | Install this source-only fork safely and update its checkout manually |
 | **[Configuration](docs/configuration.md)** | Config file locations, JSONC support, prompt overrides, and full option reference |
 | **[Project Customization](docs/project-local-customization.md)** | Repository-specific custom agents, prompt overrides, per-agent skills, and precedence |
 | **[Background Orchestration](docs/background-orchestration.md)** | Scheduler-first orchestrator model built around native background subagents |

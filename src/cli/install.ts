@@ -47,7 +47,7 @@ const SYMBOLS = {
   star: `${YELLOW}★${RESET}`,
 };
 
-const GITHUB_REPO = 'alvinunreal/oh-my-opencode-slim';
+const GITHUB_REPO = 'userbox020/opencode-goal-orchestration-plugin';
 const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 function printHeader(isUpdate: boolean): void {
@@ -555,8 +555,8 @@ async function runInstall(config: InstallConfig): Promise<number> {
   const altProviders = 'For the full configuration reference, see:';
   console.log(altProviders);
   const docsUrl =
-    'https://github.com/alvinunreal/oh-my-opencode-slim/' +
-    'blob/master/docs/configuration.md';
+    'https://github.com/userbox020/opencode-goal-orchestration-plugin/' +
+    'blob/main/docs/configuration.md';
   console.log(`  ${BLUE}${docsUrl}${RESET}`);
   console.log();
 

@@ -400,7 +400,7 @@ export const PluginConfigSchema = z
       .boolean()
       .optional()
       .describe(
-        'Disable automatic installation of plugin updates when false. Defaults to true.',
+        'Automatically install plugin updates when true. Defaults to false in this source fork; set true to opt in.',
       ),
     presets: z.record(z.string(), PresetSchema).optional(),
     agents: z.record(z.string(), AgentOverrideConfigSchema).optional(),
