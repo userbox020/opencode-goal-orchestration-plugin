@@ -1,0 +1,586 @@
+# Configuration Reference
+
+Complete reference for all configuration files and options in oh-my-opencode-slim. For repository-specific configurations, custom agents, and prompt directory lookups, see the [Project-local Customization Guide](project-local-customization.md).
+
+---
+
+## Config Files
+
+| File | Purpose |
+|------|---------|
+| `~/.config/opencode/opencode.json` | OpenCode core settings (plugin registration, providers) |
+| `~/.config/opencode/oh-my-opencode-slim.json` | Plugin settings - agents, multiplexer, MCPs, council |
+| `~/.config/opencode/oh-my-opencode-slim.jsonc` | Same, but with JSONC (comments + trailing commas). Takes precedence over `.json` if both exist |
+| `.opencode/oh-my-opencode-slim.json` | Project-local overrides (optional, higher precedence than user config) |
+
+> **💡 JSONC recommended:** Use the `.jsonc` extension to add comments and trailing commas. If both `.jsonc` and `.json` exist, `.jsonc` takes precedence.
+
+Set `OPENCODE_CONFIG_DIR` to use a custom user config directory instead of
+`~/.config/opencode`; install and runtime config discovery both honor it.
+
+Set `OH_MY_OPENCODE_SLIM_DISABLE` to `1`, `true`, `yes`, or `on` to make
+oh-my-opencode-slim return during startup without registering agents, tools,
+MCPs, hooks, Companion, or the TUI sidebar. This is a temporary escape hatch:
+
+```bash
+OH_MY_OPENCODE_SLIM_DISABLE=1 opencode
+```
+
+If OmO-slim detects an invalid plugin config for the current project, the TUI sidebar shows a warning. Run `oh-my-opencode-slim doctor` from your project root for full diagnostics.
+
+The TUI sidebar uses the compact layout by default. Set `compactSidebar` to
+`false` in `oh-my-opencode-slim.jsonc` to use the expanded layout:
+
+```jsonc
+{
+  "compactSidebar": false
+}
+```
+
+---
+
+## Prompt Overriding
+
+Customize agent prompts without modifying source code. Create markdown files in `~/.config/opencode/oh-my-opencode-slim/`:
+
+| File | Effect |
+|------|--------|
+| `{agent}.md` | Replaces the agent's default prompt entirely |
+| `{agent}_append.md` | Appends custom instructions to the default prompt |
+
+When a `preset` is active, the plugin checks preset directories before falling back to root directories. Both global user prompt directories and project-local prompt directories are searched. For the complete lookup precedence order, see [Project-local Customization](project-local-customization.md).
+
+**Example directory structure:**
+
+```
+~/.config/opencode/oh-my-opencode-slim/
+  ├── best/
+  │   ├── orchestrator.md        # Preset-specific override (used when preset=best)
+  │   └── explorer_append.md
+  ├── orchestrator.md            # Fallback override
+  ├── orchestrator_append.md
+  ├── explorer.md
+  └── ...
+```
+
+Both `{agent}.md` and `{agent}_append.md` can coexist - the full replacement takes effect first, then the append. If neither exists, the built-in default prompt is used.
+
+---
+
+## JSONC Format
+
+All config files support **JSONC** (JSON with Comments):
+
+- Single-line comments (`//`)
+- Multi-line comments (`/* */`)
+- Trailing commas in arrays and objects
+
+**Example:**
+
+```jsonc
+{
+  // Active preset
+  "preset": "openai",
+
+  /* Agent model mappings */
+  "presets": {
+    "openai": {
+      "oracle": { "model": "openai/gpt-5.6-sol" },
+      "explorer": { "model": "openai/gpt-5.6-luna" },
+    },
+  },
+
+  "multiplexer": {
+    "type": "tmux",
+    "layout": "main-vertical",
+  },
+}
+```
+
+---
+
+## Full Option Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `preset` | string | - | Active preset name (e.g. `"openai"`, `"best"`) |
+| `stripOrchestratorModel` | boolean | `false` | Preserve a runtime `/model` selection for the orchestrator after subagent dispatch by omitting its configured model from the SDK config. A selected preset's explicit `orchestrator.model` is retained. Without a runtime selection, this opt-in delegates the initial orchestrator choice to OpenCode's session default. |
+
+### Runtime Preset Switching
+
+Presets can also be switched at runtime without restarting using the `/preset` command. See [Preset Switching](preset-switching.md) for details.
+
+| `presets` | object | - | Named preset configurations |
+|-----------|--------|---|-----------------------------|
+| `presets.<name>.<agent>.model` | string | - | Model ID in `provider/model` format |
+| `presets.<name>.<agent>.temperature` | number | - | Optional temperature (0–2); when omitted, OpenCode chooses its default |
+| `presets.<name>.<agent>.variant` | string | - | Reasoning effort: `"low"`, `"medium"`, `"high"`, or `"max"` (provider-specific) |
+| `presets.<name>.<agent>.displayName` | string | - | Custom user-facing alias for the agent (e.g. `"advisor"` for `oracle`) |
+| `presets.<name>.<agent>.skills` | string[] | - | Skills the agent can use (`"*"`, `"!item"`, explicit list) |
+| `presets.<name>.<agent>.mcps` | string[] | - | MCPs the agent can use (`"*"`, `"!item"`, explicit list) |
+| `presets.<name>.<agent>.options` | object | - | Provider-specific model options passed to the AI SDK (e.g., `textVerbosity`, `thinking` budget) |
+| `agents.<customAgent>.model` | string\|array | - | Required for custom agents inferred from unknown `agents` keys |
+| `agents.<customAgent>.prompt` | string | - | Full execution prompt for a custom agent |
+| `agents.<customAgent>.orchestratorPrompt` | string | - | Exact `@agent` block injected into the orchestrator prompt; must start with `@<agent-name>` |
+| `agents.<agent>.permission` | object \| string | - | Tool-level permission rules enforced by the SDK. See [Agent Permissions](#agent-permissions) |
+| `agents.<agent>.displayName` | string | - | Custom user-facing alias for the agent in the active config |
+| `agents.<agent>.description` | string | generated | Description shown to OpenCode and the orchestrator; defaults to `Custom subagent '<name>'` for custom agents |
+| `acpAgents.<name>.command` | string | - | Command for an external ACP-compatible agent; creates a wrapper subagent named `<name>` See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.args` | string[] | `[]` | Arguments for the ACP agent command See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.env` | object | `{}` | Extra environment variables for the ACP subprocess See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.cwd` | string | session directory | Working directory override for this ACP subprocess; protocol paths should be absolute See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.description` | string | - | Description shown to OpenCode and injected into the orchestrator routing prompt See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.prompt` | string | generated wrapper prompt | Optional full prompt for the lightweight wrapper subagent See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.orchestratorPrompt` | string | generated routing block | Optional exact routing block injected into the orchestrator prompt See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.wrapperModel` | string | orchestrator default | Cheap OpenCode model used by the wrapper subagent that calls `acp_run` See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.permissionMode` | string | `ask` | How ACP permission requests are handled: `ask`, `allow`, or `reject` See [ACP-connected agents](#acp-connected-agents). |
+| `acpAgents.<name>.timeoutMs` | integer | `0` | Timeout for a single ACP run in milliseconds. `0` disables the timeout so external agents can run indefinitely. Finite values can be up to `2147483647`ms (~24.8 days) See [ACP-connected agents](#acp-connected-agents). |
+| `disabled_agents` | string[] | `["observer"]` | Agent names to disable globally. Set to `[]` to enable Observer; this is global, not per-preset See [Custom Agents](#custom-agents). |
+| `image_routing` | `"auto"` \| `"direct"` | omitted (legacy conditional) | Optional. When omitted, resolves to `"auto"` if Observer is enabled, otherwise `"direct"`. Explicit `"auto"` requires Observer enabled and saves image attachments to disk before nudging delegation to @observer. `"direct"`: always pass images to the orchestrator. |
+| `autoUpdate` | boolean | `true` | Automatically install plugin updates in the background; set to `false` for notification-only mode |
+| `multiplexer.type` | string | `"none"` | Multiplexer mode: `auto`, `tmux`, `zellij`, `herdr`, `cmux`, `kitty`, or `none` See [Multiplexer Integration](multiplexer-integration.md). |
+| `multiplexer.layout` | string | `"main-vertical"` | Layout preset: `main-vertical`, `main-horizontal`, `tiled`, `even-horizontal`, `even-vertical`. Tmux applies full layouts; Zellij and Herdr map supported layouts to split directions; cmux maintains a right-hand agent column See [Multiplexer Integration](multiplexer-integration.md). |
+| `multiplexer.main_pane_size` | number | `60` | Main pane size as percentage (20–80) for tmux main layouts; ignored by Zellij, Herdr, and cmux See [Multiplexer Integration](multiplexer-integration.md). |
+| `multiplexer.zellij_pane_mode` | string | `"agent-tab"` | Zellij pane placement: `agent-tab` creates/reuses a dedicated `opencode-agents` tab; `current-tab` opens subagents as panes in the tab containing the parent OpenCode pane, falling back to the focused tab if the parent pane cannot be resolved See [Multiplexer Integration](multiplexer-integration.md). |
+| `tmux.enabled` | boolean | `false` | Legacy alias for `multiplexer.type = "tmux"` See [Multiplexer Integration](multiplexer-integration.md). |
+| `tmux.layout` | string | `"main-vertical"` | Legacy alias for `multiplexer.layout` See [Multiplexer Integration](multiplexer-integration.md). |
+| `tmux.main_pane_size` | number | `60` | Legacy alias for `multiplexer.main_pane_size` See [Multiplexer Integration](multiplexer-integration.md). |
+| `backgroundJobs.maxSessionsPerAgent` | integer | `2` | Maximum completed/reconciled reusable child sessions per specialist type in the current orchestrator session (1–10) See [Background Job Management](#background-job-management). |
+| `backgroundJobs.maxContextLines` | integer | `50000` | Maximum total context lines (sum of all tracked file line counts) for a session to remain reusable. Sessions exceeding this threshold are evicted from the reusable pool on completion See [Background Job Management](#background-job-management). |
+| `backgroundJobs.readContextMinLines` | integer | `10` | Minimum number of lines read from a file before it appears in reusable background-job context (0–1000) See [Background Job Management](#background-job-management). |
+| `backgroundJobs.readContextMaxFiles` | integer | `8` | Maximum number of recent read-context files shown per reusable child session (0–50) See [Background Job Management](#background-job-management). |
+| `backgroundJobs.maxRetainedSnapshots` | integer | `20` | Maximum board snapshots retained per checkpoint cache epoch (1–100). Adding a snapshot beyond the limit starts a new epoch with only the current snapshot, intentionally creating one cache miss See [Background Job Management](#background-job-management). |
+| `backgroundJobs.strategy` | `"latest"` \| `"checkpoint-compatible"` | `"latest"` | Board injection strategy. `latest` preserves the current strip-and-replace behavior; `checkpoint-compatible` appends only when the formatted board changes and uses `backgroundJobs.maxRetainedSnapshots` per cache epoch. Cache state resets on compaction/session boundaries and is lost on plugin restart See [Background Job Management](#background-job-management). |
+| `backgroundJobs.orchestratorWake.enabled` | boolean | `true` | When true, idle orchestrator sessions with incomplete todos may receive periodic internal wake prompts (default every 5 minutes of continuous parent idle). Requires host session APIs; inactive on the v2 shim. See [Background Orchestration](background-orchestration.md#orchestrator-wake-scheduler) See [Background Job Management](#background-job-management). |
+| `backgroundJobs.orchestratorWake.intervalMs` | integer | `300000` | Continuous parent-idle interval between wake evaluations (`60000`–`2147483647` ms). `0` is invalid. See [Background Orchestration](background-orchestration.md#orchestrator-wake-scheduler) See [Background Job Management](#background-job-management). |
+| `backgroundJobs.wallClockTimeoutMs` | integer | `0` | **Opt-in wall-clock supervisor.** `0` disables it. Otherwise, only native `task(..., background: true)` child sessions are supervised; accepted values are `60000`–`2147483647` milliseconds See [Background Job Management](#background-job-management). |
+| `backgroundJobs.abortGraceMs` | integer | `10000` | Grace period after a wall-clock deadline for a terminal confirmation. Accepted values are `1000`–`60000` milliseconds; a hanging or failed abort does not extend this grace See [Background Job Management](#background-job-management). |
+| `backgroundJobs.waitForUserGuard` | boolean | `true` | When true, intercepts `wait_for_user` calls while background tasks are still running and the orchestrator wake scheduler is enabled, returning guidance to end the turn instead of blocking on manual input. See [Background Job Management](#background-job-management). |
+| `disabled_mcps` | string[] | `[]` | MCP server IDs to disable globally |
+| `fallback.enabled` | boolean | `true` | Enable Slim's foreground model-chain failover. It does not configure OpenCode provider/AI-SDK retries. |
+| `fallback.maxRetries` | number | `3` | Consecutive retryable 429 responses allowed for the same foreground model before Slim aborts or selects the next configured fallback model. It does not cap OpenCode provider retries or background subagent retries. |
+| `council.presets` | object | - | **Required if using council.** Named councillor presets See [Council configuration note](#council-configuration-note). |
+| `council.presets.<name>.<councillor>.model` | string | - | Councillor model See [Council configuration note](#council-configuration-note). |
+| `council.presets.<name>.<councillor>.variant` | string | - | Councillor variant See [Council configuration note](#council-configuration-note). |
+| `council.presets.<name>.<councillor>.prompt` | string | - | Optional role guidance for the councillor See [Council configuration note](#council-configuration-note). |
+| `council.default_preset` | string | `"default"` | Default preset when none is specified See [Council configuration note](#council-configuration-note). |
+| — | — | — | *Timeouts, execution mode, and retries are now handled by the orchestrator's council-mode prompt instructions; see `src/agents/council.ts`.* |
+| `interview.maxQuestions` | integer | `2` | Max questions per interview round (1–10) See [Interview configuration](interview.md). |
+| `interview.outputFolder` | string | `"interview"` | Directory where interview markdown files are written relative to the project root; absolute paths and `..` traversal are rejected See [Interview configuration](interview.md). |
+| `interview.autoOpenBrowser` | boolean | `true` | Automatically open the interview UI in your default browser during interactive runs; suppressed in tests and CI See [Interview configuration](interview.md). |
+| `interview.port` | integer | `0` | Interview server port (0–65535). `0` = OS-assigned random port (per-session mode). Any value > 0 enables [dashboard mode](interview.md#dashboard-mode) See [Interview configuration](interview.md). |
+| `interview.dashboard` | boolean | `false` | Enable [dashboard mode](interview.md#dashboard-mode) on the default port (43211). Setting `port` > 0 also enables dashboard mode. If both are set, `port` takes precedence See [Interview configuration](interview.md). |
+| `companion.enabled` | boolean | `false` | Enable/disable the floating window Rust companion See [Desktop Companion App](#desktop-companion-app). |
+| `companion.binaryPath` | string | - | Optional path to a custom companion binary to launch instead of the default install path See [Desktop Companion App](#desktop-companion-app). |
+| `companion.position` | string | `"bottom-right"` | The initial corner position of the companion window: `bottom-right`, `bottom-left`, `top-right`, or `top-left` See [Desktop Companion App](#desktop-companion-app). |
+| `companion.size` | string | `"medium"` | The default size preset of the companion window: `small` (80px), `medium` (120px), or `large` (160px) See [Desktop Companion App](#desktop-companion-app). |
+
+> **niri note:** `companion-v0.1.3` includes the fixed native companion release.
+> To make it open as a bottom-right overlay, add a niri rule matching its stable
+> `app-id`/title (`oh-my-opencode-slim-companion`), for example:
+>
+> ```kdl
+> window-rule {
+>     match app-id=r"^oh-my-opencode-slim-companion$"
+>     match title=r"^oh-my-opencode-slim-companion$"
+>     open-floating true
+>     open-focused false
+>     default-floating-position x=16 y=16 relative-to="bottom-right"
+> }
+> ```
+
+### ACP-connected agents
+
+Use `acpAgents` to expose external Agent Client Protocol servers as optional
+OpenCode subagents. The plugin creates a lightweight wrapper agent for each
+entry. The wrapper calls the built-in `acp_run` tool, which starts the ACP
+process, creates a session, sends the task, and returns the streamed result.
+`command` is only the executable; put flags and subcommands in `args`.
+
+See **[ACP Agents](acp-agents.md)** for the dedicated setup guide, auth notes,
+and troubleshooting.
+
+```jsonc
+{
+  "acpAgents": {
+    "claude-research": {
+      "command": "claude-code-acp",
+      "args": [],
+      "description": "Claude Code subscription agent for deep research",
+      "wrapperModel": "openai/gpt-5.6-luna",
+      "permissionMode": "ask",
+      "timeoutMs": 300000
+    },
+    "gemini-acp": {
+      "command": "gemini",
+      "args": ["--experimental-acp"],
+      "description": "Gemini CLI through ACP"
+    }
+  }
+}
+```
+
+> **Tip:** Use ACP to connect local agent CLIs. For example, `ollama` or `llama.cpp`
+> can be exposed as ACP agents by wrapping them in a lightweight ACP adapter.
+
+After restart, the orchestrator can delegate to `@claude-research` or
+`@gemini-acp`. Use safe names matching `^[a-z][a-z0-9_-]*$`; names cannot
+conflict with built-in or custom agents. `permissionMode` controls ACP
+permission requests, but the plugin still asks before launching the configured
+subprocess.
+
+### Council configuration note
+
+- The **Council agent model** is configured like any other agent, for example in
+  `presets.<name>.council.model`.
+- The **councillor models** are configured separately under
+  `council.presets.<name>.<councillor>.model`.
+- `council.master` (exact key) has been removed; a deprecation warning is
+  logged if a config still contains it. Other `council.master_*` variants
+  (e.g., `council.master_timeout`, `council.master_fallback`) are silently
+  dropped without warning — remove them manually.
+
+```jsonc
+{
+  "council": {
+    "default_preset": "balanced",
+    "presets": {
+      "balanced": {
+        "alpha": {
+          "model": "openai/gpt-5.6-sol",
+          "variant": "high"
+        },
+        "beta": {
+          "model": "anthropic/claude-sonnet-4-5",
+          "variant": "medium"
+        }
+      }
+    }
+  }
+}
+```
+
+### Manual Update Mode
+
+Set `autoUpdate` to `false` if you want update notifications without automatic
+`bun install` runs.
+
+```jsonc
+{
+  "autoUpdate": false
+}
+```
+
+With `autoUpdate` set to `false`, this becomes notification-only mode: you'll
+see that a new version is available, but the plugin won't install it
+automatically.
+
+Auto-update never crosses major versions. For example, a 1.x install can
+auto-update to a newer 1.x release, but it won't auto-install 2.x. When a newer
+major is available, the plugin shows a migration command instead.
+
+> Pinned plugin entries in `opencode.json` (for example
+> `"oh-my-opencode-slim@1.0.1"`) are the true version lock. Those stay pinned
+> regardless of `autoUpdate`.
+
+### Background Job Management
+
+Background job management is enabled by default and does not need to be present
+in the starter config. Add `backgroundJobs` only if you want to tune how many
+completed/reconciled child-agent sessions are reusable, how much read context is
+shown, how board snapshots are injected, or to change the default-on
+orchestrator wake interval. For glossary definitions of background-job terms
+(board snapshot, checkpoint cache epoch, injection strategy, etc.), see
+[CONTEXT.md — Background Jobs](../CONTEXT.md#background-jobs).
+The wall-clock supervisor is separately opt-in and remains disabled unless
+`wallClockTimeoutMs` is set:
+
+```jsonc
+{
+  "backgroundJobs": {
+    "maxSessionsPerAgent": 3,
+    "strategy": "checkpoint-compatible",
+    "maxRetainedSnapshots": 10,
+    "orchestratorWake": {
+      "enabled": true,
+      "intervalMs": 300000
+    },
+    "wallClockTimeoutMs": 900000,
+    "abortGraceMs": 10000
+  }
+}
+```
+
+`orchestratorWake` defaults to enabled with a 5-minute continuous-idle interval.
+Set `enabled: false` to keep idle reconciliation and background-job orchestration
+without periodic wake prompts. See the
+[Background Orchestration](background-orchestration.md) guide for the concept,
+defaults, and examples.
+
+Configurations that still use the removed `backgroundJobs.continueOnIdle` key
+emit a deprecation warning and migrate its boolean value to
+`orchestratorWake.enabled`. An `orchestratorWake.enabled` value in the same
+config file takes precedence; replace the legacy key with that setting.
+
+`wallClockTimeoutMs` is a hard deadline that only supervises explicitly
+background native task calls; foreground calls or calls with `background`
+omitted are not supervised. It is independent from OpenCode's external
+task-wait timeout, and a wall-clock timeout cannot be recovered by reusing the
+running session.
+
+`fallback.maxRetries` is unrelated to the wall-clock supervisor and to
+OpenCode's provider retry policy. A value of `0` disables Slim's foreground
+429 failover budget; it does not prevent OpenCode from retrying a provider
+request in a child session.
+
+### Agent Display Names
+
+Use `displayName` to give an agent a user-facing alias while keeping the
+internal agent name unchanged.
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "displayName": "advisor"
+    },
+    "explorer": {
+      "displayName": "researcher"
+    }
+  }
+}
+```
+
+With this config, users can refer to `@advisor` and `@researcher`, while the
+plugin still routes them to `oracle` and `explorer` internally.
+
+Notes:
+
+- `displayName` works in both top-level `agents` overrides and inside `presets`
+- `@` prefixes and surrounding whitespace are normalized automatically
+- Display names must be unique
+- Display names cannot conflict with internal agent names like `oracle` or `explorer`
+
+### Per-preset agent configuration
+
+To get per-preset behavior for any agent, built-in (`council`, `oracle`,
+`explorer`, `librarian`, `fixer`, `designer`, `observer`) or custom, define
+the agent override inside each preset block, not in root `agents`.
+
+```jsonc
+{
+  "presets": {
+    "balanced": {
+      "council": { "model": ["opencode/mimo-v2.5-free", "opencode-go/minimax-m3", "opencode/minimax-m3"] },
+      "oracle": { "model": "opencode/big-pickle", "variant": "high" },
+      "skeptic": { "model": ["opencode/big-pickle", "opencode-go/qwen3.7-plus"], "variant": "max" }
+    },
+    "nvidia-free": {
+      "council": { "model": ["nvidia/z-ai/glm-5.2", "nvidia/moonshotai/kimi-k2.6"] },
+      "oracle": { "model": "nvidia/deepseek-ai/deepseek-v4-pro", "variant": "high" },
+      "skeptic": { "model": ["nvidia/deepseek-ai/deepseek-v4-pro", "nvidia/mistralai/mistral-large-3-675b-instruct-2512"], "variant": "max" }
+    }
+  }
+}
+```
+
+#### Root `agents` wins the merge (config-file presets)
+
+At startup, config-file presets merge into `config.agents` via
+`deepMerge(preset, config.agents)` at `src/config/loader.ts:365`. The
+second argument wins for conflicting scalars, so root `agents` overrides
+the preset. A root entry for an agent makes the config-file preset value
+for that agent ignored — the agent becomes global instead of per-preset.
+Root `agents` is the escape hatch for values that should never vary by
+preset.
+
+**Runtime presets reverse this.** When a preset is activated at runtime
+via the `/preset` command, the merge at `src/index.ts:227` is
+`deepMerge(config.agents, presetAgents)` — the runtime preset is the
+override and wins. Root `agents` only guarantees precedence for
+config-file presets resolved at startup.
+
+#### Sharing a prompt across presets (custom agents)
+
+A custom agent with a long prompt does not need the prompt duplicated into
+every preset block. Put the prompt in a file and define the agent in each
+preset with only `model` (and `variant` if needed):
+
+1. Create `<projectDir>/.opencode/oh-my-opencode-slim/<agentName>.md` with
+   the shared prompt.
+2. In each preset block, define the agent with only the model fields (no
+   `prompt`):
+
+```jsonc
+{
+  "presets": {
+    "balanced": {
+      "skeptic": { "model": ["opencode/big-pickle", "opencode-go/qwen3.7-plus"], "variant": "max" }
+    },
+    "nvidia-free": {
+      "skeptic": { "model": ["nvidia/deepseek-ai/deepseek-v4-pro", "nvidia/mistralai/mistral-large-3-675b-instruct-2512"], "variant": "max" }
+    }
+  }
+}
+```
+
+`loadAgentPrompt` (`src/config/loader.ts:418`) is preset-aware and reads
+`<agentName>.md` from the `oh-my-opencode-slim/` prompts directory. Lookup
+order:
+
+1. `<projectDir>/.opencode/oh-my-opencode-slim/<preset>/<agentName>.md` (project, preset-specific)
+2. `<projectDir>/.opencode/oh-my-opencode-slim/<agentName>.md` (project, preset-agnostic)
+3. `~/.config/opencode/oh-my-opencode-slim/<preset>/<agentName>.md` (user, preset-specific)
+4. `~/.config/opencode/oh-my-opencode-slim/<agentName>.md` (user, preset-agnostic)
+
+A preset block without `prompt` falls back to the file prompt (if one
+exists), not to a root `agents.<name>.prompt`. The project-level paths (1
+and 2) work universally and are the recommended location for shared
+prompts. User-level paths (3 and 4) can collide with a plugin install
+symlink if `~/.config/opencode/oh-my-opencode-slim/` is symlinked to the
+plugin source.
+
+> **⚠️ Known limitation (#899):** Prompt files take precedence over inline
+> prompts everywhere — not just in presets, but also in root `agents`.
+> If you set an inline `prompt` in a preset or in root `agents` and a
+> prompt file exists for that agent, the inline prompt is silently dropped
+> in favor of the file. Until #899 is fixed, the file-based shared prompt
+> pattern above is the safe path: keep the prompt in the file, and put
+> only `model`/`variant` in the config. Do not mix an inline `prompt`
+> with a prompt file for the same agent.
+
+### Custom Agents
+
+Unknown keys under `agents` are treated as custom subagents. A custom agent needs
+its own `model`, a normal `prompt`, and optionally an `orchestratorPrompt` that
+teaches the orchestrator exactly when to delegate to it.
+
+```jsonc
+{
+  "agents": {
+    "janitor": {
+      "model": "github-copilot/gpt-5.6",
+      "prompt": "You are Janitor. Audit codebase entropy, dead code, docs drift, naming inconsistencies, and unnecessary complexity. Prefer analysis and plans over direct edits.",
+      "orchestratorPrompt": "@janitor\n- Role: Maintenance specialist for codebase cleanup and entropy reduction\n- **Delegate when:** after large refactors • cleanup/technical-debt review • dead code or docs drift is suspected\n- **Don't delegate when:** feature implementation • urgent debugging • UI/UX work"
+    }
+  }
+}
+```
+
+Notes:
+
+- Custom agent names must be safe identifiers such as `janitor` or `security-reviewer`
+- Custom agents without a `model` are skipped with a warning
+- Disabled custom agents are not registered or injected into the orchestrator prompt
+
+> **Tip:** Keep `orchestratorPrompt` concise — the orchestrator reads it every turn.
+> Include: when to delegate, when NOT to delegate, and the agent's role in one paragraph.
+
+### Agent Permissions
+
+The `permission` field provides deterministic, tool-level permission restrictions on custom agents, built-in agent overrides, and presets. Unlike prompt instructions ("do not edit files"), these rules are enforced by the OpenCode SDK at the tool-call level.
+
+The field accepts either:
+
+1. **Shorthand string** — `"ask"`, `"allow"`, or `"deny"` applied to all tools
+2. **Object** — keys are tool names, values are `"ask" | "allow" | "deny"` or (for rule keys) a pattern-to-action map
+
+**Example: read-only `planner` agent:**
+
+```jsonc
+{
+  "agents": {
+    "planner": {
+      "model": "openai/gpt-5.5",
+      "variant": "high",
+      "skills": [],
+      "mcps": ["context7", "gh_grep"],
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "grep *": "allow"
+        },
+        "webfetch": "allow",
+        "websearch": "allow", // opencode's built-in websearch tool, not a plugin MCP
+        "task": "deny"
+      },
+      "prompt": "You are Planner. Create implementation plans only. Do not implement code."
+    }
+  }
+}
+```
+
+**Example: `security-reviewer` agent:**
+
+```jsonc
+{
+  "agents": {
+    "security-reviewer": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "webfetch": "allow"
+      },
+      "prompt": "You are a security reviewer. Inspect code and report findings. Do not patch anything."
+    }
+  }
+}
+```
+
+#### Permission keys
+
+| Key | Value type | Description |
+|-----|------------|-------------|
+| `read` | string or object | File reading |
+| `edit` | string or object | File editing |
+| `glob` | string or object | File pattern matching |
+| `grep` | string or object | Content search |
+| `list` | string or object | Directory listing |
+| `bash` | string or object | Shell command execution |
+| `task` | string or object | Subagent task delegation |
+| `external_directory` | string or object | Access to directories outside the workspace |
+| `lsp` | string or object | Language server protocol operations |
+| `skill` | string or object | Skill execution |
+| `todowrite` | string only | Todo list writing |
+| `question` | string only | Asking the user questions |
+| `webfetch` | string only | Web content fetching |
+| `websearch` | string only | Web search |
+| `codesearch` | string only | Code search |
+| `doom_loop` | string only | Doom loop prevention |
+
+Keys marked "string or object" accept pattern-based rules (e.g. `bash: { "git status*": "allow", "*": "ask" }`). Keys marked "string only" accept a single `"ask"`, `"allow"`, or `"deny"` value. Unknown tool names (including MCP-derived keys) pass through without error.
+
+#### Merge semantics
+
+When a user supplies `permission` and also uses the `skills` or `mcps` arrays on the same agent, the plugin merges them:
+
+1. **User-supplied `permission` is the base layer.**
+2. **Plugin-generated rules from the `skills` array override `permission.skill`** — the `skills` array is authoritative for skill gating.
+3. **Plugin-generated rules from the `mcps` array set `permission.<mcp>_*` keys** — the `mcps` array is authoritative for MCP gating.
+4. **User-supplied keys for standard tools** (`edit`, `bash`, `webfetch`, `task`, etc.) survive the merge untouched.
+
+Use the `skills`/`mcps` arrays for skill and MCP gating. Use `permission` for everything else (file access, bash, web, task delegation).
+
+### Multiplexer
+
+The multiplexer hosts child agent sessions in terminal panes. See [Multiplexer Integration](multiplexer-integration.md) for backend setup, layout configuration, and troubleshooting.
+
+### Desktop Companion App
+
+The desktop companion app provides a visual status overlay showing running and active agents. For quick installation instructions, binary paths, config defaults, and release information, see the full **[Desktop Companion Guide](companion.md)**.
+
+Once installed, configure it in your `oh-my-opencode-slim` settings:
+
+```jsonc
+{
+  "companion": {
+    "enabled": true,
+    "position": "bottom-right", // optional: bottom-right, bottom-left, top-right, top-left
+    "size": "medium"            // optional: small, medium, large
+  }
+}
+```

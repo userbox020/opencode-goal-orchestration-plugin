@@ -1,0 +1,1333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "preset": {
+      "type": "string"
+    },
+    "setDefaultAgent": {
+      "type": "boolean"
+    },
+    "compactSidebar": {
+      "description": "Use the compact TUI sidebar layout. Defaults to true; set false to use the expanded layout.",
+      "type": "boolean"
+    },
+    "stripOrchestratorModel": {
+      "description": "When true, omit orchestrator.model and orchestrator.variant from the SDK config so OpenCode uses the session model selected with /model after subagent dispatch. An explicitly selected preset that sets orchestrator.model is preserved. Defaults to false.",
+      "type": "boolean"
+    },
+    "autoUpdate": {
+      "description": "Disable automatic installation of plugin updates when false. Defaults to true.",
+      "type": "boolean"
+    },
+    "presets": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "variant": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "variant": {
+              "type": "string"
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mcps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "prompt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "orchestratorPrompt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "permission": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "ask",
+                    "allow",
+                    "deny"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "read": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "edit": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "glob": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "grep": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "list": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "bash": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "task": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "external_directory": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "lsp": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "skill": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "enum": [
+                              "ask",
+                              "allow",
+                              "deny"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "todowrite": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    "question": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    "webfetch": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    "websearch": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    "codesearch": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    "doom_loop": {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    }
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "variant": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "variant": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mcps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "orchestratorPrompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "permission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ask",
+                  "allow",
+                  "deny"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "read": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "edit": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "glob": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "grep": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "list": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "bash": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "task": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "external_directory": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "lsp": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "skill": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "ask",
+                            "allow",
+                            "deny"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "todowrite": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "question": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "webfetch": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "websearch": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "codesearch": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "doom_loop": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow",
+                      "deny"
+                    ]
+                  }
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "ask",
+                        "allow",
+                        "deny"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "ask",
+                          "allow",
+                          "deny"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "disabled_agents": {
+      "description": "Agent names to disable completely. Disabled agents are not instantiated and cannot be delegated to. Orchestrator and council internal agents (councillor) cannot be disabled. By default, 'observer' is disabled. Remove it from this list and configure a vision-capable model to enable.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "image_routing": {
+      "description": "How image attachments are handled. When omitted, preserves legacy conditional behavior: intercept attachments only when observer is enabled. \"auto\": requires observer to be enabled and saves attachments to disk before nudging delegation to @observer. \"direct\": always passes attachments to the orchestrator untouched.",
+      "type": "string",
+      "enum": [
+        "auto",
+        "direct"
+      ]
+    },
+    "disabled_mcps": {
+      "description": "MCP server names to disable completely. Disabled servers are not started and cannot be used by agents.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "disabled_tools": {
+      "description": "Tool names to disable completely. Disabled tools are not registered with OpenCode and cannot be used by agents.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "disabled_skills": {
+      "description": "Skill names to disable completely. Disabled skills are not granted to agents, even when referenced by presets or agent overrides.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "multiplexer": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "default": "none",
+          "type": "string",
+          "enum": [
+            "auto",
+            "tmux",
+            "zellij",
+            "herdr",
+            "kitty",
+            "cmux",
+            "none"
+          ]
+        },
+        "layout": {
+          "default": "main-vertical",
+          "type": "string",
+          "enum": [
+            "main-horizontal",
+            "main-vertical",
+            "tiled",
+            "even-horizontal",
+            "even-vertical"
+          ]
+        },
+        "main_pane_size": {
+          "default": 60,
+          "type": "number",
+          "minimum": 20,
+          "maximum": 80
+        },
+        "zellij_pane_mode": {
+          "default": "agent-tab",
+          "type": "string",
+          "enum": [
+            "agent-tab",
+            "current-tab"
+          ]
+        }
+      }
+    },
+    "interview": {
+      "type": "object",
+      "properties": {
+        "maxQuestions": {
+          "default": 2,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "outputFolder": {
+          "default": "interview",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?![A-Za-z]:[\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+        },
+        "autoOpenBrowser": {
+          "default": true,
+          "description": "Automatically open the interview UI in your default browser during interactive runs. Disabled automatically in tests and CI.",
+          "type": "boolean"
+        },
+        "port": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "dashboard": {
+          "default": false,
+          "type": "boolean"
+        }
+      }
+    },
+    "backgroundJobs": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "default": "latest",
+          "description": "Board injection strategy. \"latest\" replaces prior board messages; \"checkpoint-compatible\" preserves them and appends only changed board snapshots.",
+          "type": "string",
+          "enum": [
+            "latest",
+            "checkpoint-compatible"
+          ]
+        },
+        "maxSessionsPerAgent": {
+          "default": 2,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "maxContextLines": {
+          "default": 50000,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500000
+        },
+        "readContextMinLines": {
+          "default": 10,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "readContextMaxFiles": {
+          "default": 8,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "maxRetainedSnapshots": {
+          "default": 20,
+          "description": "Maximum board snapshots retained per checkpoint cache epoch (1–100). Exceeding the limit starts a new epoch with the current snapshot and intentionally creates one cache miss.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "orchestratorWake": {
+          "default": {
+            "enabled": true,
+            "intervalMs": 300000
+          },
+          "description": "Periodic orchestrator wake scheduler for idle sessions with incomplete todos. Default enabled at a 5-minute interval. Requires host session APIs (session.get, todo, children, status, promptAsync); inactive on the v2 shim.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "When true, idle orchestrator sessions with incomplete todos may receive periodic internal wake prompts. Default enabled.",
+              "type": "boolean"
+            },
+            "intervalMs": {
+              "default": 300000,
+              "description": "Continuous parent-idle interval between orchestrator wake evaluations (60,000–2,147,483,647ms). Default 300,000 (5 minutes). 0 is invalid.",
+              "type": "integer",
+              "minimum": 60000,
+              "maximum": 2147483647
+            }
+          }
+        },
+        "wallClockTimeoutMs": {
+          "default": 0,
+          "description": "Explicit opt-in wall-clock deadline for native task(..., background: true) child sessions. 0 disables supervision; finite values are 60,000–2,147,483,647ms.",
+          "anyOf": [
+            {
+              "type": "number",
+              "const": 0
+            },
+            {
+              "type": "integer",
+              "minimum": 60000,
+              "maximum": 2147483647
+            }
+          ]
+        },
+        "abortGraceMs": {
+          "default": 10000,
+          "description": "Grace period after a wall-clock deadline while OpenCode confirms the child terminal state (1,000–60,000ms).",
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 60000
+        },
+        "waitForUserGuard": {
+          "default": true,
+          "description": "When true, intercept wait_for_user calls made while background tasks are still running and the orchestrator wake scheduler is enabled, returning guidance to end the turn instead of blocking on manual input. Default enabled.",
+          "type": "boolean"
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "maxRetries": {
+          "default": 3,
+          "description": "Number of consecutive 429/rate-limit responses tolerated on the same model before aborting (or swapping to the next fallback model when a chain is configured).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "council": {
+      "type": "object",
+      "properties": {
+        "presets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          }
+        },
+        "default_preset": {
+          "default": "default",
+          "type": "string"
+        }
+      },
+      "required": [
+        "presets"
+      ],
+      "additionalProperties": {}
+    },
+    "companion": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "binaryPath": {
+          "description": "Path to a custom companion binary to launch.",
+          "type": "string",
+          "minLength": 1
+        },
+        "position": {
+          "type": "string",
+          "enum": [
+            "bottom-right",
+            "bottom-left",
+            "top-right",
+            "top-left"
+          ]
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ]
+        },
+        "gifPack": {
+          "description": "Bundled companion animation pack to use.",
+          "type": "string",
+          "enum": [
+            "default"
+          ]
+        },
+        "loopStyle": {
+          "description": "Companion animation playback style: classic loops or smooth ping-pong playback.",
+          "type": "string",
+          "enum": [
+            "classic",
+            "smooth"
+          ]
+        },
+        "speed": {
+          "description": "Companion animation playback speed multiplier. Defaults to 1.",
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "debug": {
+          "description": "Enable verbose native companion debug logs.",
+          "type": "boolean"
+        }
+      }
+    },
+    "webfetch": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "When false, skip registering this enhanced webfetch so OpenCode uses its built-in version.",
+          "type": "boolean"
+        },
+        "model": {
+          "description": "Dedicated model(s) for smartfetch secondary-model summarization. Same shape as agent model config (string, array of strings/objects with id+variant). Takes priority over small_model, agents.explorer.model, and agents.librarian.model.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "variant": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "acpAgents": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "args": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "orchestratorPrompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "wrapperModel": {
+            "type": "string",
+            "pattern": "^[^/\\s]+\\/[^\\s]+$"
+          },
+          "timeoutMs": {
+            "default": 0,
+            "description": "Timeout for a single ACP run in milliseconds. Set to 0 to disable the timeout.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "permissionMode": {
+            "default": "ask",
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow",
+              "reject"
+            ]
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "title": "oh-my-opencode-slim",
+  "description": "Configuration schema for oh-my-opencode-slim plugin for OpenCode"
+}
