@@ -358,7 +358,7 @@ async function verifyHostSmoke(tarballPath: string) {
 
     let pluginEntry = pathToFileURL(installedEntry).href;
     if (process.argv.includes('--workflow')) {
-      fixture = await startGoalWorkflowFixture(workspaceDir);
+      fixture = await startGoalWorkflowFixture(workspaceDir, dataDir);
       const wrapper = path.join(configDir, 'workflow-plugin.mjs');
       writeFileSync(
         wrapper,

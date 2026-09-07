@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { RGBA } from '@opentui/core';
 import { createRoot } from 'solid-js/dist/solid.js';
 import type { GoalSnapshot } from './goal/core';
-import { getOpenCodeDataDir } from './goal/store';
+import { getOpenCodeStateDir } from './goal/store';
 import { readTmuxPane } from './multiplexer/tmux-pane-registry';
 import {
   type ActiveTmuxPaneRegistration,
@@ -156,7 +156,7 @@ describe('native Goal sidebar card', () => {
             ready: true,
             path: {
               directory: tempDir,
-              state: getOpenCodeDataDir(),
+              state: getOpenCodeStateDir(),
             },
           },
           route: { current: { name: 'home' } },
@@ -207,47 +207,24 @@ describe('native Goal sidebar card', () => {
     }
   });
 
-  test('same-session resource updates, disappears, and cleans its timer', () => {
+  test('same-session resource refreshes and disappears', () => {
     let snapshot: unknown = createGoalSnapshot('active', 'First objective');
-    let tick: (() => void) | undefined;
-    const timerHandle = { id: 'goal-refresh' };
-    const clearIntervalSpy = mock(() => {});
-    const setIntervalSpy = mock((callback: () => void, delay: number) => {
-      tick = callback;
-      expect(delay).toBe(1000);
-      return timerHandle as unknown as ReturnType<typeof setInterval>;
-    });
-    let disposeRoot = () => {};
-
-    const resource = createRoot((dispose) => {
-      disposeRoot = dispose;
-      return createGoalCardResource({
-        sessionID: 'same-session',
-        getDataRoot: () => 'C:/data',
-        readSnapshot: () => snapshot,
-        setInterval: setIntervalSpy as unknown as typeof setInterval,
-        clearInterval: clearIntervalSpy as unknown as typeof clearInterval,
-      });
+    const resource = createGoalCardResource({
+      sessionID: 'same-session',
+      getDataRoot: () => 'C:/data',
+      readSnapshot: () => snapshot,
     });
 
-    try {
-      expect(resource.current()?.objective).toBe('First objective');
+    expect(resource.current()?.objective).toBe('First objective');
 
-      snapshot = createGoalSnapshot('paused', 'Revised objective');
-      tick?.();
-      expect(resource.current()?.objective).toBe('Revised objective');
-      expect(resource.current()?.lifecycle.label).toBe('paused');
+    snapshot = createGoalSnapshot('paused', 'Revised objective');
+    resource.refresh();
+    expect(resource.current()?.objective).toBe('Revised objective');
+    expect(resource.current()?.lifecycle.label).toBe('paused');
 
-      snapshot = { apiVersion: 1, state: 'no-goal' };
-      tick?.();
-      expect(resource.current()).toBeUndefined();
-      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      disposeRoot();
-    }
-
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
-    expect(clearIntervalSpy).toHaveBeenCalledWith(timerHandle);
+    snapshot = { apiVersion: 1, state: 'no-goal' };
+    resource.refresh();
+    expect(resource.current()).toBeUndefined();
   });
 
   test('fails closed for read errors and corrupt snapshots', () => {
@@ -268,14 +245,25 @@ describe('native Goal sidebar card', () => {
 
 describe('native Goal durable read boundary', () => {
   test('reads only when TUI state is ready and roots match', () => {
-    const localRoot = path.resolve('C:/local-opencode-state');
+    const localStateRoot = path.resolve(
+      'C:\\Users\\Local\\.local\\state\\opencode',
+    );
+    const localDataRoot = path.resolve(
+      'C:\\Users\\Local\\.local\\share\\opencode',
+    );
+    const reportedLocalStateRoot =
+      process.platform === 'win32'
+        ? localStateRoot.toUpperCase()
+        : localStateRoot;
     const matchingState = {
       ready: true,
-      path: { state: path.join(localRoot, 'nested', '..') },
+      path: { state: path.join(reportedLocalStateRoot, 'nested', '..') },
     };
     const mismatchedState = {
       ready: true,
-      path: { state: path.resolve('C:/remote-opencode-state') },
+      path: {
+        state: path.resolve('C:\\Users\\Remote\\.local\\state\\opencode'),
+      },
     };
     const reader = mock(() => ({ apiVersion: 1, state: 'no-goal' }));
     const noTimer = (() => 1) as unknown as typeof setInterval;
@@ -287,7 +275,12 @@ describe('native Goal durable read boundary', () => {
       disposeMatching = dispose;
       return createGoalCardResource({
         sessionID: 'matching-session',
-        getDataRoot: () => resolveLocalGoalDataRoot(matchingState, localRoot),
+        getDataRoot: () =>
+          resolveLocalGoalDataRoot(
+            matchingState,
+            localDataRoot,
+            localStateRoot,
+          ),
         readSnapshot: reader,
         setInterval: noTimer,
         clearInterval: clearTimer,
@@ -297,7 +290,12 @@ describe('native Goal durable read boundary', () => {
       disposeMismatch = dispose;
       return createGoalCardResource({
         sessionID: 'mismatched-session',
-        getDataRoot: () => resolveLocalGoalDataRoot(mismatchedState, localRoot),
+        getDataRoot: () =>
+          resolveLocalGoalDataRoot(
+            mismatchedState,
+            localDataRoot,
+            localStateRoot,
+          ),
         readSnapshot: reader,
         setInterval: noTimer,
         clearInterval: clearTimer,
@@ -308,16 +306,52 @@ describe('native Goal durable read boundary', () => {
       expect(matching.current()).toBeUndefined();
       expect(mismatch.current()).toBeUndefined();
       expect(reader).toHaveBeenCalledTimes(1);
-      expect(reader).toHaveBeenCalledWith('matching-session', localRoot);
+      expect(reader).toHaveBeenCalledWith('matching-session', localDataRoot);
       expect(
         resolveLocalGoalDataRoot(
-          { ready: false, path: { state: localRoot } },
-          localRoot,
+          { ready: false, path: { state: localStateRoot } },
+          localDataRoot,
+          localStateRoot,
         ),
       ).toBeUndefined();
     } finally {
       disposeMatching();
       disposeMismatch();
+    }
+  });
+
+  test('malformed host state fails closed without throwing', () => {
+    const localStateRoot = path.resolve(
+      'C:\\Users\\Local\\.local\\state\\opencode',
+    );
+    const localDataRoot = path.resolve(
+      'C:\\Users\\Local\\.local\\share\\opencode',
+    );
+    const malformedStates: Array<[string, unknown]> = [
+      [
+        'truthy string ready',
+        { ready: 'true', path: { state: localStateRoot } },
+      ],
+      ['truthy numeric ready', { ready: 1, path: { state: localStateRoot } }],
+      ['relative state path', { ready: true, path: { state: 'opencode' } }],
+      ['empty state path', { ready: true, path: { state: '   ' } }],
+      ['non-string state path', { ready: true, path: { state: 42 } }],
+      ['missing state', undefined],
+      ['null state', null],
+      ['missing path', { ready: true }],
+      ['null path', { ready: true, path: null }],
+    ];
+
+    for (const [caseName, malformedState] of malformedStates) {
+      let result: string | undefined;
+      expect(() => {
+        result = resolveLocalGoalDataRoot(
+          malformedState,
+          localDataRoot,
+          localStateRoot,
+        );
+      }, caseName).not.toThrow();
+      expect(result, caseName).toBeUndefined();
     }
   });
 

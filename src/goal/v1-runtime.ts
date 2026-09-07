@@ -1,4 +1,8 @@
 import type { GoalRuntimeComposition } from './core';
+import {
+  recoverV1GoalBeforeRehydrate,
+  type V1GoalRecoveryHost,
+} from './v1-recovery';
 
 /**
  * Serializes only in-flight board-run rehydration. A later independent caller
@@ -9,6 +13,7 @@ export function createGoalSessionRuntimeResolver(options: {
   runtimes: Map<string, GoalRuntimeComposition>;
   boardRunID: string;
   createRuntime: (sessionID: string) => GoalRuntimeComposition;
+  recovery?: V1GoalRecoveryHost;
 }): (sessionID: string) => Promise<GoalRuntimeComposition> {
   const inFlight = new Map<string, Promise<GoalRuntimeComposition>>();
 
@@ -22,6 +27,14 @@ export function createGoalSessionRuntimeResolver(options: {
         if (!runtime) {
           runtime = options.createRuntime(sessionID);
           options.runtimes.set(sessionID, runtime);
+        }
+        if (options.recovery) {
+          await recoverV1GoalBeforeRehydrate({
+            runtime,
+            parentSessionID: sessionID,
+            nextBoardRunID: options.boardRunID,
+            ...options.recovery,
+          });
         }
         await runtime.observer.rehydrateBoardRun({
           boardRunID: options.boardRunID,

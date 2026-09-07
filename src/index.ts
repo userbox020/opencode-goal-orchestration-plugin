@@ -19,6 +19,7 @@ import {
   type GoalAutoCreateMessagePart,
   type GoalCommands,
   type GoalRuntimeComposition,
+  GoalStore,
   type RuntimeBindingIdentity,
 } from './goal';
 import {
@@ -192,11 +193,6 @@ export interface V1GoalAutoCreateHandlerOptions {
   enabled: boolean;
   commandsForSession: (sessionID: string) => Promise<GoalCommands>;
   agentForSession: (sessionID: string) => string | undefined;
-  openForGoal: (
-    sessionID: string,
-    readSnapshot: GoalCommands['readSnapshot'],
-  ) => Promise<void>;
-  resetForNonGoal: (sessionID: string) => void;
   onFailure: (sessionID: string, error: unknown) => void;
 }
 
@@ -218,7 +214,6 @@ export function createV1GoalAutoCreateHandler(
       if (!options.enabled || disposed || deleted.has(message.sessionID))
         return Promise.resolve();
       if (options.agentForSession(message.sessionID) !== 'goal') {
-        options.resetForNonGoal(message.sessionID);
         return Promise.resolve();
       }
 
@@ -250,8 +245,6 @@ export function createV1GoalAutoCreateHandler(
               objective,
               requiredCriteria: ['The requested objective is completed.'],
             });
-            if (!isCurrent()) return;
-            await options.openForGoal(message.sessionID, commands.readSnapshot);
             if (!isCurrent()) return;
             if (processedMessageIDs.size >= 10_000) processedMessageIDs.clear();
             processedMessageIDs.add(dedupeKey);
@@ -420,6 +413,8 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
   const deletedGoalSessions = new Set<string>();
   const failedGoalSessions = new Set<string>();
   let goalDisposed = false;
+  let goalStartupRecoveryTimer: ReturnType<typeof setTimeout> | undefined;
+  let scheduleGoalStartupRecovery = (): void => {};
   let flushGoalReconciliations = async (): Promise<void> => {};
   const goalVerificationCriteria = new Map<string, string>();
   const goalVerificationVerdicts = new Map<string, GoalVerificationVerdict>();
@@ -639,7 +634,55 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
         goalSessionControllers.set(sessionID, controller);
         return createGoalRuntime(sessionID, { signal: controller.signal });
       },
+      recovery: { client: ctx.client, directory: ctx.directory },
     });
+    let goalStartupRecoveryScheduled = false;
+    const recoverPersistedGoalsAtStartup = async (): Promise<void> => {
+      if (goalDisposed) return;
+      try {
+        const response = await ctx.client.session.list({
+          query: { directory: ctx.directory },
+        });
+        if (goalDisposed || !Array.isArray(response.data)) return;
+        for (const session of response.data) {
+          if (goalDisposed) return;
+          const sessionID =
+            typeof session === 'object' &&
+            session !== null &&
+            'id' in session &&
+            typeof session.id === 'string'
+              ? session.id.trim()
+              : '';
+          if (!sessionID) continue;
+          try {
+            const state = new GoalStore(sessionID, {
+              migrateLegacyOnRead: false,
+            }).read();
+            if (goalDisposed) return;
+            if (state.goal) await goalForSession(sessionID);
+          } catch (error) {
+            if (goalDisposed) return;
+            log('[goal] startup session recovery failed', {
+              sessionID,
+              error: error instanceof Error ? error.name : 'unknown',
+            });
+          }
+        }
+      } catch (error) {
+        if (goalDisposed) return;
+        log('[goal] startup session discovery failed', {
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    };
+    scheduleGoalStartupRecovery = () => {
+      if (goalDisposed || goalStartupRecoveryScheduled) return;
+      goalStartupRecoveryScheduled = true;
+      goalStartupRecoveryTimer = setTimeout(() => {
+        goalStartupRecoveryTimer = undefined;
+        void recoverPersistedGoalsAtStartup();
+      }, 0);
+    };
     flushGoalReconciliations = async () => {
       if (goalDisposed) return;
       await Promise.all(
@@ -673,18 +716,23 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
                     ...binding.identity,
                     status,
                   });
-                  await runtime.observer.reconcileRuntimeBinding(
-                    binding.identity,
-                  );
                   const criterionID = goalVerificationCriteria.get(key);
                   const verdict = goalVerificationVerdicts.get(key);
                   if (criterionID && verdict?.criterionID === criterionID) {
-                    await runtime.observer.recordRuntimeEvidence({
-                      ...binding.identity,
-                      criterionID,
-                      passed: verdict.passed,
-                      contradicts: verdict.contradicts,
+                    await runtime.observer.finalizeRuntimeEvidenceBatch({
+                      items: [
+                        {
+                          ...binding.identity,
+                          criterionID,
+                          passed: verdict.passed,
+                          contradicts: verdict.contradicts,
+                        },
+                      ],
                     });
+                  } else {
+                    await runtime.observer.reconcileRuntimeBinding(
+                      binding.identity,
+                    );
                   }
                 }
                 pendingGoalReconciliations.delete(key);
@@ -734,14 +782,6 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
           return commands;
         },
         agentForSession: (sessionID) => sessionMetadata.getAgent(sessionID),
-        openForGoal: async (sessionID, readSnapshot) => {
-          await goalPanelAutoOpenController?.openForGoal(
-            sessionID,
-            readSnapshot,
-          );
-        },
-        resetForNonGoal: (sessionID) =>
-          goalPanelAutoOpenController?.resetForNonGoal(sessionID),
         onFailure: (sessionID, error) => {
           failedGoalSessions.add(sessionID);
           log('[goal] automatic creation failed', {
@@ -869,7 +909,7 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
       additionalTrailingContext: (sessionID) => {
         if (!goalEnabled) return undefined;
         if (failedGoalSessions.has(sessionID)) {
-          return 'Goal setup or panel opening failed. Do not claim Goal execution or completion without current durable state and verified evidence. Tell the user the failure and offer to retry.';
+          return 'Goal setup failed. Do not claim Goal execution or completion without current durable state and verified evidence. Tell the user the failure and offer to retry.';
         }
         const runtime = goalRuntimes.get(sessionID);
         if (!runtime) return undefined;
@@ -1537,7 +1577,10 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
       deepworkCommandHook.registerCommand(opencodeConfig);
       reflectCommandHook.registerCommand(opencodeConfig);
       loopCommandHook.registerCommand(opencodeConfig);
-      if (goalEnabled) goalCommandHook.registerCommand(opencodeConfig);
+      if (goalEnabled) {
+        goalCommandHook.registerCommand(opencodeConfig);
+        scheduleGoalStartupRecovery();
+      }
     },
 
     event: async (input) => {
@@ -1752,6 +1795,10 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
     dispose: async () => {
       goalDisposed = true;
+      if (goalStartupRecoveryTimer !== undefined) {
+        clearTimeout(goalStartupRecoveryTimer);
+        goalStartupRecoveryTimer = undefined;
+      }
       goalAutoCreateHandler?.dispose();
       for (const controller of goalSessionControllers.values())
         controller.abort();
@@ -1886,7 +1933,6 @@ export const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
       if (agent && !internal) {
         if (agent !== 'goal' && agent !== 'orchestrator') {
-          goalPanelAutoOpenController?.resetForNonGoal(input.sessionID);
           orchestratorWakeScheduler.forgetSession(input.sessionID);
         }
         foregroundFallback.registerSessionAgent(input.sessionID, agent);

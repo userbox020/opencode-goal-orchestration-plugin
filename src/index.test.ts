@@ -305,8 +305,6 @@ describe('V1 Goal automatic creation', () => {
       enabled: true,
       agentForSession: () => 'goal',
       commandsForSession: () => ready,
-      openForGoal: async () => {},
-      resetForNonGoal: () => {},
       onFailure: () => {},
     });
     const message = {
@@ -375,7 +373,7 @@ describe('V1 Goal automatic creation', () => {
         ).goal.permission.task_result,
       ).toBe('allow');
       const sessionID = 'real-goal';
-      for (const argumentsText of ['status', 'panel']) {
+      for (const argumentsText of ['status']) {
         const output = { parts: [] as Array<{ type: string; text?: string }> };
         await hooks['command.execute.before']?.(
           { command: 'goal', arguments: argumentsText, sessionID },
@@ -406,7 +404,7 @@ describe('V1 Goal automatic creation', () => {
       expect(new GoalStore(sessionID).read().goal?.objective).toBe(
         parts[0].text,
       );
-      expect(testPanelURLs).toHaveLength(1);
+      expect(testPanelURLs).toHaveLength(0);
       const message = {
         info: { id: 'real-input', role: 'user', sessionID, agent: 'goal' },
         parts,
@@ -473,8 +471,13 @@ describe('V1 Goal automatic creation', () => {
           parts,
         },
       );
-      expect(testPanelURLs).toHaveLength(2);
-      const panel = new URL(testPanelURLs[1]);
+      expect(testPanelURLs).toHaveLength(0);
+      await hooks['command.execute.before']?.(
+        { command: 'goal', arguments: 'panel', sessionID },
+        { parts: [] },
+      );
+      expect(testPanelURLs).toHaveLength(1);
+      const panel = new URL(testPanelURLs[0]);
       await hooks.event?.({
         event: {
           type: 'session.deleted',
@@ -504,22 +507,15 @@ describe('V1 Goal automatic creation', () => {
     }
   });
 
-  test('creates from a classified Goal message, injects active context, and resets panel opening after another agent', async () => {
+  test('creates from a classified Goal message without opening a browser', async () => {
     const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-auto-');
     const sessionID = 'goal-auto-session';
     const commands = createGoalRuntime(sessionID, { root }).commands;
-    const opened: string[] = [];
     let agent = 'goal';
     const handler = createV1GoalAutoCreateHandler({
       enabled: true,
       commandsForSession: async () => commands,
       agentForSession: () => agent,
-      openForGoal: async (id) => {
-        opened.push(id);
-      },
-      resetForNonGoal: () => {
-        opened.length = 0;
-      },
       onFailure: () => {
         throw new Error('automatic creation should not fail');
       },
@@ -538,15 +534,11 @@ describe('V1 Goal automatic creation', () => {
       expect(commands.renderGoalContext().context).toContain(
         'Ship automatic Goal creation',
       );
-      expect(opened).toEqual([sessionID]);
-
       await handler.handle({
         sessionID,
         messageID: 'first-goal-message',
         parts: [{ type: 'text', text: 'Duplicate' }],
       });
-      expect(opened).toEqual([sessionID]);
-
       agent = 'orchestrator';
       await handler.handle({
         sessionID,
@@ -560,7 +552,6 @@ describe('V1 Goal automatic creation', () => {
         parts: [{ type: 'text', text: 'Do not overwrite the existing Goal' }],
       });
       expect(commands.status()?.objective).toBe('Ship automatic Goal creation');
-      expect(opened).toEqual([sessionID]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -580,8 +571,6 @@ describe('V1 Goal automatic creation', () => {
         return commands;
       },
       agentForSession: () => 'goal',
-      openForGoal: async () => {},
-      resetForNonGoal: () => {},
       onFailure: () => {
         failures += 1;
       },
@@ -622,54 +611,8 @@ describe('V1 Goal automatic creation', () => {
     }
   });
 
-  test('retries a failed panel open without replacing the durable Goal', async () => {
-    const root = await mkdtemp(
-      '/tmp/oh-my-opencode-slim-goal-auto-open-retry-',
-    );
-    const sessionID = 'goal-auto-open-retry';
-    const commands = createGoalRuntime(sessionID, { root }).commands;
-    let openAttempts = 0;
-    let failures = 0;
-    const handler = createV1GoalAutoCreateHandler({
-      enabled: true,
-      commandsForSession: async () => commands,
-      agentForSession: () => 'goal',
-      openForGoal: async () => {
-        openAttempts += 1;
-        if (openAttempts === 1) throw new Error('panel unavailable');
-      },
-      resetForNonGoal: () => {},
-      onFailure: () => {
-        failures += 1;
-      },
-    });
-
-    try {
-      await handler.handle({
-        sessionID,
-        messageID: 'first-message',
-        parts: [{ type: 'text', text: 'Create one durable Goal' }],
-      });
-      const originalID = commands.status()?.id;
-      expect(originalID).toBeDefined();
-
-      await handler.handle({
-        sessionID,
-        messageID: 'retry-message',
-        parts: [{ type: 'text', text: 'Do not replace the durable Goal' }],
-      });
-      expect(failures).toBe(1);
-      expect(openAttempts).toBe(2);
-      expect(commands.status()?.id).toBe(originalID);
-      expect(commands.status()?.objective).toBe('Create one durable Goal');
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
   test('does nothing when the V1 Goal path is disabled', async () => {
     let commandsCalls = 0;
-    let panelCalls = 0;
     const handler = createV1GoalAutoCreateHandler({
       enabled: false,
       commandsForSession: async () => {
@@ -677,10 +620,6 @@ describe('V1 Goal automatic creation', () => {
         return {} as never;
       },
       agentForSession: () => 'goal',
-      openForGoal: async () => {
-        panelCalls += 1;
-      },
-      resetForNonGoal: () => {},
       onFailure: () => {},
     });
 
@@ -690,7 +629,6 @@ describe('V1 Goal automatic creation', () => {
       parts: [{ type: 'text', text: 'Do not create a Goal' }],
     });
     expect(commandsCalls).toBe(0);
-    expect(panelCalls).toBe(0);
   });
 });
 
@@ -987,6 +925,382 @@ describe('plugin tool registration', () => {
 });
 
 describe('V1 Goal runtime reconciliation', () => {
+  test('scheduled startup recovery is nonblocking, one-shot, and completes durable evidence', async () => {
+    const originalEnv = { ...process.env };
+    const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-startup-');
+    const sessionID = 'goal-startup-recovery-parent';
+    const taskID = 'goal-startup-recovery-verifier';
+    let hooks: Awaited<ReturnType<typeof plugin>> | undefined;
+    try {
+      process.env.XDG_DATA_HOME = root;
+      process.env.XDG_CONFIG_HOME = root;
+      delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+      const prior = createGoalRuntime(sessionID);
+      await prior.observer.rehydrateBoardRun({
+        boardRunID: 'prior-run',
+        expected: prior.observer.boardRunFence(),
+      });
+      const goal = await prior.commands.create({
+        objective: 'Recover on startup',
+        requiredCriteria: ['Startup recovery passes.'],
+      });
+      const identity = {
+        goalID: goal.id,
+        sessionGeneration: goal.sessionGeneration,
+        revision: goal.revision,
+        boardRunID: 'prior-run',
+        taskID,
+        boardGeneration: 1,
+      };
+      await prior.observer.bindRuntimeTask({ ...identity, status: 'running' });
+      await prior.observer.assignRuntimeVerification({
+        ...identity,
+        criterionID: 'criterion-1',
+      });
+      await prior.observer.updateRuntimeBinding({
+        ...identity,
+        status: 'completed',
+      });
+
+      const noop = async () => ({});
+      const client = createPluginClient(noop);
+      const discoveredSession = {
+        id: sessionID,
+        projectID: 'project-1',
+        directory: root,
+        title: 'Goal recovery',
+        version: '1',
+        time: { created: 1, updated: 1 },
+      };
+      let resolveList!: (value: {
+        data: Array<typeof discoveredSession>;
+      }) => void;
+      const listResult = new Promise<{ data: Array<typeof discoveredSession> }>(
+        (resolve) => {
+          resolveList = resolve;
+        },
+      );
+      let markListStarted!: () => void;
+      const listStarted = new Promise<void>((resolve) => {
+        markListStarted = resolve;
+      });
+      let listCalls = 0;
+      client.session.list = () => {
+        listCalls += 1;
+        markListStarted();
+        return listResult;
+      };
+      client.session.get = async () => ({
+        data: { id: taskID, parentID: sessionID },
+      });
+      client.session.messages = async ({ path }: { path: { id: string } }) =>
+        path.id === sessionID
+          ? {
+              data: [
+                {
+                  info: { role: 'assistant', sessionID },
+                  parts: [
+                    {
+                      type: 'tool',
+                      tool: 'task',
+                      state: {
+                        input: {
+                          description: 'Goal verification: criterion-1',
+                          background: true,
+                        },
+                        output: `<task id="${taskID}" state="running">\n<summary>Background task running</summary>\n<task_result>\nThe task is working in the background.\n</task_result>\n</task>`,
+                      },
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              data: [
+                {
+                  info: {
+                    role: 'assistant',
+                    sessionID: taskID,
+                    time: { completed: 1 },
+                  },
+                  parts: [
+                    {
+                      type: 'text',
+                      text: '<goal_verdict>{"criterionID":"criterion-1","verdict":"passed"}</goal_verdict>',
+                    },
+                  ],
+                },
+              ],
+            };
+
+      hooks = await plugin({
+        client,
+        directory: root,
+        worktree: root,
+        serverUrl: new URL('http://127.0.0.1:4096'),
+      } as never);
+      expect(listCalls).toBe(0);
+
+      await hooks.config?.({});
+      await hooks.config?.({});
+      expect(listCalls).toBe(0);
+      await Promise.resolve();
+      expect(listCalls).toBe(0);
+
+      await listStarted;
+      expect(listCalls).toBe(1);
+      resolveList({ data: [discoveredSession] });
+
+      let recovered = new GoalStore(sessionID).read().goal;
+      for (
+        let attempt = 0;
+        recovered?.status !== 'completed' && attempt < 20;
+        attempt += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        recovered = new GoalStore(sessionID).read().goal;
+      }
+      expect(recovered).toMatchObject({
+        status: 'completed',
+        evidence: [{ criterionID: 'criterion-1', passed: true }],
+        bindings: [{ reconciled: true }],
+        verificationAssignments: [{ consumed: true }],
+      });
+    } finally {
+      await hooks?.dispose?.();
+      process.env = originalEnv;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('startup Goal discovery failure does not break plugin initialization', async () => {
+    const originalEnv = { ...process.env };
+    const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-startup-fail-');
+    let hooks: Awaited<ReturnType<typeof plugin>> | undefined;
+    try {
+      process.env.XDG_DATA_HOME = root;
+      process.env.XDG_CONFIG_HOME = root;
+      delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+      const client = createPluginClient(async () => ({}));
+      let markListAttempted!: () => void;
+      const listAttempted = new Promise<void>((resolve) => {
+        markListAttempted = resolve;
+      });
+      client.session.list = async () => {
+        markListAttempted();
+        throw new Error('session discovery unavailable');
+      };
+
+      hooks = await plugin({
+        client,
+        directory: root,
+        worktree: root,
+        serverUrl: new URL('http://127.0.0.1:4096'),
+      } as never);
+      await hooks.config?.({});
+      await listAttempted;
+      await Promise.resolve();
+
+      expect(hooks.config).toBeFunction();
+      expect(hooks.event).toBeFunction();
+    } finally {
+      await hooks?.dispose?.();
+      process.env = originalEnv;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('dispose before the startup timer prevents Goal discovery', async () => {
+    const originalEnv = { ...process.env };
+    const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-cancel-timer-');
+    let hooks: Awaited<ReturnType<typeof plugin>> | undefined;
+    try {
+      process.env.XDG_DATA_HOME = root;
+      process.env.XDG_CONFIG_HOME = root;
+      delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+      const client = createPluginClient(async () => ({}));
+      let listCalls = 0;
+      client.session.list = async () => {
+        listCalls += 1;
+        return { data: [] };
+      };
+
+      hooks = await plugin({
+        client,
+        directory: root,
+        worktree: root,
+        serverUrl: new URL('http://127.0.0.1:4096'),
+      } as never);
+      await hooks.config?.({});
+      await hooks.dispose?.();
+      hooks = undefined;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(listCalls).toBe(0);
+    } finally {
+      await hooks?.dispose?.();
+      process.env = originalEnv;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('dispose while Goal discovery is pending prevents late store reads', async () => {
+    const originalEnv = { ...process.env };
+    const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-cancel-list-');
+    let hooks: Awaited<ReturnType<typeof plugin>> | undefined;
+    let resolveList!: (value: { data: Array<{ id: string }> }) => void;
+    let readSpy: ReturnType<typeof spyOn> | undefined;
+    try {
+      process.env.XDG_DATA_HOME = root;
+      process.env.XDG_CONFIG_HOME = root;
+      delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+      const client = createPluginClient(async () => ({}));
+      const listResult = new Promise<{ data: Array<{ id: string }> }>(
+        (resolve) => {
+          resolveList = resolve;
+        },
+      );
+      let markListStarted!: () => void;
+      const listStarted = new Promise<void>((resolve) => {
+        markListStarted = resolve;
+      });
+      client.session.list = () => {
+        markListStarted();
+        return listResult;
+      };
+
+      hooks = await plugin({
+        client,
+        directory: root,
+        worktree: root,
+        serverUrl: new URL('http://127.0.0.1:4096'),
+      } as never);
+      await hooks.config?.({});
+      await listStarted;
+      readSpy = spyOn(GoalStore.prototype, 'read');
+      await hooks.dispose?.();
+      hooks = undefined;
+      resolveList({ data: [{ id: 'late-goal-session' }] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(readSpy).toHaveBeenCalledTimes(0);
+    } finally {
+      resolveList?.({ data: [] });
+      readSpy?.mockRestore();
+      await hooks?.dispose?.();
+      process.env = originalEnv;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('next Goal command recovers durable completed verifier evidence', async () => {
+    const originalEnv = { ...process.env };
+    const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-recovery-');
+    const sessionID = 'goal-recovery-parent';
+    const taskID = 'goal-recovery-verifier';
+    let hooks: Awaited<ReturnType<typeof plugin>> | undefined;
+    try {
+      process.env.XDG_DATA_HOME = root;
+      process.env.XDG_CONFIG_HOME = root;
+      delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+      const prior = createGoalRuntime(sessionID);
+      await prior.observer.rehydrateBoardRun({
+        boardRunID: 'prior-run',
+        expected: prior.observer.boardRunFence(),
+      });
+      const goal = await prior.commands.create({
+        objective: 'Recover on command',
+        requiredCriteria: ['Recovery passes.'],
+      });
+      const identity = {
+        goalID: goal.id,
+        sessionGeneration: goal.sessionGeneration,
+        revision: goal.revision,
+        boardRunID: 'prior-run',
+        taskID,
+        boardGeneration: 1,
+      };
+      await prior.observer.bindRuntimeTask({ ...identity, status: 'running' });
+      await prior.observer.assignRuntimeVerification({
+        ...identity,
+        criterionID: 'criterion-1',
+      });
+      await prior.observer.updateRuntimeBinding({
+        ...identity,
+        status: 'completed',
+      });
+
+      const noop = async () => ({});
+      const client = createPluginClient(noop);
+      client.session.get = async () => ({
+        data: { id: taskID, parentID: sessionID },
+      });
+      client.session.messages = async ({ path }: { path: { id: string } }) =>
+        path.id === sessionID
+          ? {
+              data: [
+                {
+                  info: { role: 'assistant', sessionID },
+                  parts: [
+                    {
+                      type: 'tool',
+                      tool: 'task',
+                      state: {
+                        input: {
+                          description: 'Goal verification: criterion-1',
+                          background: true,
+                        },
+                        output: `<task id="${taskID}" state="running">\n<summary>Background task running</summary>\n<task_result>\nThe task is working in the background.\n</task_result>\n</task>`,
+                      },
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              data: [
+                {
+                  info: {
+                    role: 'assistant',
+                    sessionID: taskID,
+                    time: { completed: 1 },
+                  },
+                  parts: [
+                    {
+                      type: 'text',
+                      text: '<goal_verdict>{"criterionID":"criterion-1","verdict":"passed"}</goal_verdict>',
+                    },
+                  ],
+                },
+              ],
+            };
+      hooks = await plugin({
+        client,
+        directory: root,
+        worktree: root,
+        serverUrl: new URL('http://127.0.0.1:4096'),
+      } as never);
+      await hooks.config?.({});
+
+      const output = { parts: [] as unknown[] };
+      await hooks['command.execute.before']?.(
+        { command: 'goal', sessionID, arguments: 'status' },
+        output,
+      );
+      expect(new GoalStore(sessionID).read().goal).toMatchObject({
+        status: 'completed',
+        evidence: [{ criterionID: 'criterion-1', passed: true }],
+        bindings: [{ reconciled: true }],
+        verificationAssignments: [{ consumed: true }],
+      });
+      expect(JSON.stringify(output.parts)).toContain('Status: completed');
+    } finally {
+      await hooks?.dispose?.();
+      process.env = originalEnv;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test('does not bind a historical launch already completed in retained history', async () => {
     const originalEnv = { ...process.env };
     const root = await mkdtemp('/tmp/oh-my-opencode-slim-goal-history-');

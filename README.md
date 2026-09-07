@@ -105,8 +105,9 @@ For example:
 Add pagination to the audit log API and verify the existing clients still work.
 ```
 
-If the session has no Goal, that first message creates one automatically and
-opens the Goal panel. Later messages with Goal selected continue the same Goal.
+If the session has no Goal, that first message creates one automatically.
+Later messages with Goal selected continue the same Goal. The browser panel
+opens only when you run `/goal panel`.
 
 ## Goal Commands
 
@@ -149,13 +150,17 @@ rules.
 Goal state is durable per session. The objective, lifecycle state, criteria,
 progress, and accepted completed proof persist across plugin restarts.
 
-Runtime task bindings belong to the current board run. After OpenCode or the
-plugin restarts, unfinished bindings and evidence must be observed and
-reconciled again before they can count. Previously completed verification proof
-remains historical proof, but does not authorize new runtime work.
+Runtime task bindings belong to the current board run. Before replacing an old
+run after restart, V1 makes one recovery attempt for an active Goal. Recovery
+succeeds only when every pending verifier assignment has exact launch and child
+identity, a completed binding, and a strict passing final verdict, and one
+atomic update completes the Goal. Paused, partial, invalid, or inconclusive
+batches write no recovered evidence; normal re-fencing retires them and fresh
+verification is required. Previously completed proof remains historical proof
+without authorizing new runtime work.
 
 Paused Goals retain terminal observations for already launched tasks. Evidence
-received while paused is audited when the Goal resumes.
+received while paused is audited on resume only within the same board run.
 
 ## Goal Status Surfaces
 

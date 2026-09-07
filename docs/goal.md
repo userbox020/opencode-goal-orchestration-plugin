@@ -28,14 +28,10 @@ supports `/goal status`, `/goal panel`, `/goal pause`, `/goal resume`,
 `/goal panel` opens a plugin-owned, localhost-only, read-only browser panel in
 the default browser. It shows only the current Goal status, criteria, and
 progress; it has no controls and cannot mutate Goal state. This is not an
-embedded Desktop status card and requires no OpenCode source modification. If
-the browser does not open automatically, rerun `/goal panel`. Reloading the page
-also requires `/goal panel`: its access token is intentionally kept in memory,
-not in browser storage or the session transcript.
-
-When you send your first message with **Goal** selected, the panel also opens
-automatically. Consecutive Goal messages do not reopen it; switching to another
-agent and then back to Goal opens it again.
+embedded Desktop status card and requires no OpenCode source modification. Goal
+creation does not open a browser; run `/goal panel` explicitly. Reloading the
+page also requires `/goal panel`: its access token is intentionally kept in
+memory, not in browser storage or the session transcript.
 
 Goal runtime observation is available only in the V1 plugin host. V2 exposes
 no Goal command or partial runtime behavior. Runtime task bindings are scoped
@@ -58,9 +54,18 @@ non-authoritative. Terminal observations for already-launched tasks continue to
 be persisted while a Goal is paused.
 
 Completion waits for all current verification assignments to be consumed.
-Evidence received while paused is audited on resume. Transient persistence
-failures retain pending reconciliation for retry instead of silently discarding
-the verdict. Restart still invalidates unfinished runtime evidence.
+Evidence received while paused is audited on resume only within the same board
+run. Transient live persistence failures retain pending reconciliation for
+retry instead of silently discarding the verdict.
+
+Before board-run rehydration, V1 makes one completion-only recovery attempt for
+an active Goal. Every current pending verifier assignment must have exactly one
+completed current binding, unique exact parent launch provenance, the exact
+child session, and a terminal error-free final assistant result containing one
+strict matching passing verdict. One atomic update must consume the entire
+batch and complete the Goal. Paused, partial, invalid, or inconclusive batches
+write no recovered evidence; normal re-fencing retires them and requires fresh
+verification.
 
 The scheduler rehydrates Goal state before its first post-restart fallback
 decision. A pending binding reconciliation receives one Goal-owned scheduler

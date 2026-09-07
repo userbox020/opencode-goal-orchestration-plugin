@@ -86,6 +86,15 @@ export function getOpenCodeDataDir(): string {
   return join(dataHome, 'opencode');
 }
 
+export function getOpenCodeStateDir(): string {
+  const configured = process.env.XDG_STATE_HOME?.trim();
+  const stateHome =
+    configured && isAbsolute(configured)
+      ? configured
+      : join(homedir(), '.local', 'state');
+  return join(stateHome, 'opencode');
+}
+
 function emptyState(): GoalSessionState {
   return {
     version: GOAL_STATE_VERSION,

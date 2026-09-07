@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import type {
   TuiCommand,
   TuiPlugin,
@@ -10,7 +10,7 @@ import { createElement, insert, setProp } from '@opentui/solid';
 import { DEFAULT_DISABLED_AGENTS, SUBAGENT_NAMES } from './config/constants';
 import { loadPluginConfig } from './config/loader';
 import { createGoalRuntime, type GoalSnapshot } from './goal/core';
-import { getOpenCodeDataDir } from './goal/store';
+import { getOpenCodeDataDir, getOpenCodeStateDir } from './goal/store';
 import {
   recordTmuxPane,
   removeTmuxPane,
@@ -87,17 +87,9 @@ export interface GoalCardResource {
   refresh: () => void;
 }
 
-type SolidRuntime = typeof import('solid-js');
-
 // Keep Solid external to this bundle so lifecycle ownership is shared with
 // @opentui/solid. A bundled second Solid runtime cannot attach slot cleanup.
-async function importSolidRuntime(specifier: string): Promise<SolidRuntime> {
-  return (await import(specifier)) as SolidRuntime;
-}
-
-const { createSignal, onCleanup, onMount } = await importSolidRuntime(
-  'solid-js/dist/solid.js',
-);
+const { createSignal, onCleanup, onMount } = await import('solid-js');
 
 interface SidebarTheme {
   accent: unknown;
@@ -137,10 +129,7 @@ function element(
     if (value !== undefined) setProp(node, key, value);
   }
 
-  for (const child of children) {
-    if (child === null || child === undefined || child === false) continue;
-    insert(node, child);
-  }
+  insert(node, children);
 
   return node as unknown as JSX.Element;
 }
@@ -296,12 +285,32 @@ function comparablePath(value: string): string {
 }
 
 export function resolveLocalGoalDataRoot(
-  state: { ready?: boolean; path?: { state?: string } },
+  state: unknown,
   localDataRoot = getOpenCodeDataDir(),
+  localStateRoot = getOpenCodeStateDir(),
 ): string | undefined {
-  if (!state.ready || !state.path?.state) return undefined;
   try {
-    return comparablePath(state.path.state) === comparablePath(localDataRoot)
+    if (!state || typeof state !== 'object') return undefined;
+    const candidate = state as {
+      ready?: unknown;
+      path?: unknown;
+    };
+    if (
+      candidate.ready !== true ||
+      !candidate.path ||
+      typeof candidate.path !== 'object'
+    ) {
+      return undefined;
+    }
+    const reportedStateRoot = (candidate.path as { state?: unknown }).state;
+    if (
+      typeof reportedStateRoot !== 'string' ||
+      !reportedStateRoot.trim() ||
+      !isAbsolute(reportedStateRoot)
+    ) {
+      return undefined;
+    }
+    return comparablePath(reportedStateRoot) === comparablePath(localStateRoot)
       ? localDataRoot
       : undefined;
   } catch {

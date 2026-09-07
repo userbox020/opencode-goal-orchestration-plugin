@@ -2,12 +2,140 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord | undefined {
+  return typeof value === 'object' && value !== null
+    ? (value as UnknownRecord)
+    : undefined;
+}
+
+function sameEvidenceIdentity(
+  left: UnknownRecord,
+  right: UnknownRecord,
+): boolean {
+  return (
+    left.goalID === right.goalID &&
+    left.sessionGeneration === right.sessionGeneration &&
+    left.revision === right.revision &&
+    left.boardRunID === right.boardRunID &&
+    left.taskID === right.taskID &&
+    left.boardGeneration === right.boardGeneration
+  );
+}
+
+function hasDurableCompletion(value: unknown, objective: string): boolean {
+  const state = asRecord(value);
+  if (!state) throw new Error('Durable Goal state is malformed');
+  if (state.goal === null) return false;
+  const goal = asRecord(state.goal);
+  if (!goal) throw new Error('Durable Goal record is malformed');
+  if (goal.objective !== objective) {
+    throw new Error('Durable Goal objective does not match the fixture');
+  }
+  if (goal.status !== 'completed') return false;
+  if (
+    typeof goal.id !== 'string' ||
+    typeof goal.sessionGeneration !== 'number' ||
+    typeof goal.revision !== 'number' ||
+    typeof goal.completionBoardRunID !== 'string' ||
+    !goal.completionBoardRunID ||
+    !Array.isArray(goal.requiredCriteria) ||
+    goal.requiredCriteria.length === 0 ||
+    !Array.isArray(goal.bindings) ||
+    !Array.isArray(goal.verificationAssignments) ||
+    !Array.isArray(goal.evidence)
+  ) {
+    throw new Error('Completed durable Goal record is malformed');
+  }
+
+  const currentIdentity = (item: UnknownRecord) =>
+    item.goalID === goal.id &&
+    item.sessionGeneration === goal.sessionGeneration &&
+    item.revision === goal.revision &&
+    item.boardRunID === goal.completionBoardRunID &&
+    item.superseded === false;
+  const bindings = goal.bindings.map(asRecord);
+  const assignments = goal.verificationAssignments.map(asRecord);
+  const evidence = goal.evidence.map(asRecord);
+  if (
+    bindings.some((item) => !item) ||
+    assignments.some((item) => !item) ||
+    evidence.some((item) => !item)
+  ) {
+    throw new Error('Completed durable Goal proof arrays are malformed');
+  }
+
+  const currentBindings = bindings.filter((item): item is UnknownRecord =>
+    Boolean(item && currentIdentity(item)),
+  );
+  if (
+    currentBindings.length === 0 ||
+    currentBindings.some(
+      (binding) =>
+        !['completed', 'failed', 'cancelled'].includes(
+          String(binding.status),
+        ) || binding.reconciled !== true,
+    )
+  ) {
+    throw new Error('Durable Goal has unreconciled current bindings');
+  }
+
+  const eligibleEvidence = evidence.filter((item): item is UnknownRecord =>
+    Boolean(
+      item &&
+        currentIdentity(item) &&
+        assignments.some(
+          (assignment) =>
+            assignment &&
+            currentIdentity(assignment) &&
+            assignment.consumed === true &&
+            assignment.criterionID === item.criterionID &&
+            sameEvidenceIdentity(assignment, item),
+        ) &&
+        currentBindings.some(
+          (binding) =>
+            binding.status === 'completed' &&
+            binding.reconciled === true &&
+            sameEvidenceIdentity(binding, item),
+        ),
+    ),
+  );
+
+  for (const criterionValue of goal.requiredCriteria) {
+    const criterion = asRecord(criterionValue);
+    if (!criterion || typeof criterion.id !== 'string' || !criterion.id) {
+      throw new Error('Durable Goal criterion is malformed');
+    }
+    const criterionEvidence = eligibleEvidence.filter(
+      (item) => item.criterionID === criterion.id,
+    );
+    if (criterionEvidence.some((item) => item.contradicts === true)) {
+      throw new Error(`Durable Goal criterion ${criterion.id} is contradicted`);
+    }
+    if (
+      !criterionEvidence.some(
+        (item) => item.passed === true && item.contradicts === false,
+      )
+    ) {
+      throw new Error(
+        `Durable Goal criterion ${criterion.id} lacks consumed passing evidence`,
+      );
+    }
+  }
+  return true;
+}
+
 /** A local scripted model, not a test of an external model's reasoning. */
-export async function startGoalWorkflowFixture(workspace: string) {
+export async function startGoalWorkflowFixture(
+  workspace: string,
+  xdgDataHome: string,
+) {
   const artifact = path.join(workspace, 'goal-workflow.txt');
   const objective =
     'Create goal-workflow.txt containing verified fixture, then verify it.';
-  let panelURL: URL | undefined;
+  let automaticPanelInvoked = false;
+  let automaticPanelOrigin = 'unknown';
   let workerLaunched = false;
   let workerDone = false;
   let verifierLaunched = false;
@@ -22,8 +150,16 @@ export async function startGoalWorkflowFixture(workspace: string) {
           throw new Error('Fixture request too large');
       }
       if (request.url === '/panel' && request.method === 'POST') {
-        panelURL = new URL(JSON.parse(raw).url);
-        response.end('{}');
+        automaticPanelInvoked = true;
+        const panelRequest = asRecord(JSON.parse(raw));
+        if (typeof panelRequest?.url === 'string') {
+          automaticPanelOrigin = new URL(panelRequest.url).origin;
+        }
+        response.writeHead(409).end(
+          JSON.stringify({
+            error: 'Automatic Goal panel opening is forbidden',
+          }),
+        );
         return;
       }
       if (request.url !== '/v1/chat/completions') {
@@ -171,6 +307,13 @@ export async function startGoalWorkflowFixture(workspace: string) {
       if (!created.ok)
         throw new Error(`Fixture session creation failed: ${created.status}`);
       const session = (await created.json()) as { id: string };
+      const durableGoalPath = path.join(
+        xdgDataHome,
+        'opencode',
+        'oh-my-opencode-slim',
+        'goals',
+        `${Buffer.from(session.id).toString('base64url')}.json`,
+      );
       const prompt = await fetch(
         `${host}/session/${session.id}/prompt_async${query}`,
         {
@@ -188,30 +331,28 @@ export async function startGoalWorkflowFixture(workspace: string) {
         throw new Error(`Fixture prompt rejected: ${prompt.status}`);
       const deadline = Date.now() + 150_000;
       while (Date.now() < deadline) {
-        if (panelURL) {
-          const result = await fetch(`${panelURL.origin}/api/v1/snapshot`, {
-            headers: { Authorization: `Bearer ${panelURL.hash.slice(1)}` },
-            signal: AbortSignal.timeout(5_000),
-          });
-          const snapshot = (await result.json()) as {
-            goal?: {
-              objective: string;
-              status: string;
-              progress: { verified: number; total: number };
-            };
-          };
-          if (snapshot.goal?.status === 'completed') {
+        if (automaticPanelInvoked) {
+          throw new Error(
+            `Goal panel opened automatically when manual-only behavior was required: ${automaticPanelOrigin}`,
+          );
+        }
+        if (existsSync(durableGoalPath)) {
+          const durableState: unknown = JSON.parse(
+            readFileSync(durableGoalPath, 'utf8'),
+          );
+          if (hasDurableCompletion(durableState, objective)) {
             if (
               !workerDone ||
               !verifierDone ||
-              snapshot.goal.objective !== objective ||
-              snapshot.goal.progress.verified !== snapshot.goal.progress.total
-            )
+              !existsSync(artifact) ||
+              readFileSync(artifact, 'utf8') !== 'verified fixture\n'
+            ) {
               throw new Error(
-                'Fixture completed without its worker/verifier proof',
+                'Durable Goal completed without its worker/verifier artifact proof',
               );
+            }
             console.log(
-              'Packaged Goal workflow passed: automatic creation, worker, verifier, completed snapshot.',
+              'Packaged Goal workflow passed: automatic creation, worker, verifier, no automatic panel, durable completion.',
             );
             return;
           }
@@ -219,7 +360,7 @@ export async function startGoalWorkflowFixture(workspace: string) {
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       throw new Error(
-        `Packaged Goal workflow timed out (requests=${requests}, worker=${workerDone}, verifier=${verifierDone}, panel=${Boolean(panelURL)})`,
+        `Packaged Goal workflow timed out waiting for durable completion with no automatic panel (requests=${requests}, worker=${workerDone}, verifier=${verifierDone}, automaticPanel=${automaticPanelInvoked}, durableRecord=${existsSync(durableGoalPath)})`,
       );
     },
     async close() {

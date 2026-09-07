@@ -48,6 +48,11 @@ const runtimeEvidenceInputSchema = runtimeBindingIdentitySchema.extend({
   contradicts: z.boolean().default(false),
 });
 
+const runtimeEvidenceBatchInputSchema = z.object({
+  items: z.array(runtimeEvidenceInputSchema).min(1),
+  requireGoalCompletion: z.boolean().default(false),
+});
+
 const runtimeVerificationAssignmentInputSchema =
   runtimeBindingIdentitySchema.extend({
     criterionID: z.string().trim().min(1),
@@ -71,6 +76,9 @@ export type RuntimeBindingUpdateInput = z.infer<
   typeof runtimeBindingUpdateInputSchema
 >;
 export type RuntimeEvidenceInput = z.input<typeof runtimeEvidenceInputSchema>;
+export type RuntimeEvidenceBatchInput = z.input<
+  typeof runtimeEvidenceBatchInputSchema
+>;
 export type RuntimeVerificationAssignmentInput = z.infer<
   typeof runtimeVerificationAssignmentInputSchema
 >;
@@ -78,6 +86,11 @@ export type BoardRunFence = z.infer<typeof boardRunFenceSchema>;
 export type BoardRunRehydrationInput = z.infer<
   typeof boardRunRehydrationInputSchema
 >;
+
+export interface GoalRecoverySnapshot {
+  goal: GoalRecord | null;
+  boardRunFence: BoardRunFence;
+}
 
 export interface GoalCoreOptions extends GoalStoreOptions {
   idGenerator?: () => string;
@@ -149,6 +162,7 @@ export interface GoalCommands {
 
 export interface GoalRuntimeObserver {
   boardRunFence(): BoardRunFence;
+  readRecoverySnapshot(): GoalRecoverySnapshot;
   rehydrateBoardRun(
     input: BoardRunRehydrationInput,
   ): Promise<GoalRecord | null>;
@@ -171,6 +185,9 @@ export interface GoalRuntimeObserver {
   recordRuntimeEvidence(
     input: RuntimeEvidenceInput,
     expected?: GoalVersionCheck,
+  ): Promise<GoalRecord>;
+  finalizeRuntimeEvidenceBatch(
+    input: RuntimeEvidenceBatchInput,
   ): Promise<GoalRecord>;
 }
 
@@ -609,6 +626,98 @@ class GoalCore implements GoalCommands {
     return this.requireGoal(state.goal);
   }
 
+  async runtimeFinalizeRuntimeEvidenceBatch(
+    input: RuntimeEvidenceBatchInput,
+  ): Promise<GoalRecord> {
+    const parsed = runtimeEvidenceBatchInputSchema.parse(input);
+    const state = await this.store.update(undefined, (current) => {
+      const goal = this.requireGoal(current.goal);
+      const itemKeys = new Set<string>();
+      let changed = false;
+
+      for (const item of parsed.items) {
+        this.assertCurrentIdentity(goal, current.boardRunID, item);
+        const binding = this.findCurrentBinding(goal, current.boardRunID, item);
+        if (binding.status !== 'completed') {
+          throw new GoalLifecycleError(
+            'Runtime evidence finalization requires completed bindings',
+          );
+        }
+        const resolvedCriterionID = criterionID(goal, item.criterionID);
+        if (!resolvedCriterionID) {
+          throw new GoalLifecycleError(
+            `Unknown required criterion: ${item.criterionID}`,
+          );
+        }
+        const itemKey = [
+          item.goalID,
+          item.sessionGeneration,
+          item.revision,
+          item.boardRunID,
+          item.taskID,
+          item.boardGeneration,
+          resolvedCriterionID,
+        ].join(':');
+        if (itemKeys.has(itemKey)) throw new GoalRevisionConflictError();
+        itemKeys.add(itemKey);
+        const assignments = goal.verificationAssignments.filter(
+          (candidate) =>
+            !candidate.superseded &&
+            candidate.criterionID === resolvedCriterionID &&
+            hasBindingIdentity(candidate, item),
+        );
+        const assignment = assignments[0];
+        if (assignments.length !== 1 || !assignment) {
+          throw new GoalLifecycleError(
+            'Runtime evidence finalization requires one verification assignment',
+          );
+        }
+        const existing = goal.evidence.find(
+          (candidate) =>
+            !candidate.superseded &&
+            candidate.criterionID === resolvedCriterionID &&
+            hasBindingIdentity(candidate, item),
+        );
+        if (existing) {
+          if (
+            existing.passed !== item.passed ||
+            existing.contradicts !== item.contradicts ||
+            !binding.reconciled ||
+            !assignment.consumed
+          ) {
+            throw new GoalRevisionConflictError();
+          }
+          continue;
+        }
+        if (goal.status === 'completed' || goal.status === 'cancelled') {
+          throw new GoalLifecycleError(
+            'Runtime evidence cannot be added to a terminal Goal',
+          );
+        }
+        if (assignment.consumed) {
+          throw new GoalRevisionConflictError();
+        }
+        binding.reconciled = true;
+        assignment.consumed = true;
+        goal.evidence.push({
+          ...item,
+          criterionID: resolvedCriterionID,
+          superseded: false,
+        });
+        changed = true;
+      }
+
+      if (changed) updateVersion(goal);
+      auditRuntimeEvidence(goal, current.boardRunID);
+      if (parsed.requireGoalCompletion && goal.status !== 'completed') {
+        throw new GoalLifecycleError(
+          'Runtime evidence batch did not complete the Goal',
+        );
+      }
+    });
+    return this.requireGoal(state.goal);
+  }
+
   async runtimeAssignRuntimeVerification(
     input: RuntimeVerificationAssignmentInput,
     expected?: GoalVersionCheck,
@@ -795,6 +904,17 @@ class GoalCore implements GoalCommands {
     };
   }
 
+  readRecoverySnapshot(): GoalRecoverySnapshot {
+    const state = this.store.read();
+    return clone({
+      goal: state.goal,
+      boardRunFence: {
+        boardRunID: state.boardRunID,
+        boardRunGeneration: state.boardRunGeneration,
+      },
+    });
+  }
+
   async runtimeRehydrateBoardRun(
     input: BoardRunRehydrationInput,
   ): Promise<GoalRecord | null> {
@@ -888,6 +1008,10 @@ class GoalRuntimeObserverImpl implements GoalRuntimeObserver {
     return this.core.boardRunFence();
   }
 
+  readRecoverySnapshot(): GoalRecoverySnapshot {
+    return this.core.readRecoverySnapshot();
+  }
+
   rehydrateBoardRun(
     input: BoardRunRehydrationInput,
   ): Promise<GoalRecord | null> {
@@ -927,6 +1051,12 @@ class GoalRuntimeObserverImpl implements GoalRuntimeObserver {
     expected?: GoalVersionCheck,
   ): Promise<GoalRecord> {
     return this.core.runtimeRecordRuntimeEvidence(input, expected);
+  }
+
+  finalizeRuntimeEvidenceBatch(
+    input: RuntimeEvidenceBatchInput,
+  ): Promise<GoalRecord> {
+    return this.core.runtimeFinalizeRuntimeEvidenceBatch(input);
   }
 }
 
