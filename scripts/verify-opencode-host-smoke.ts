@@ -18,7 +18,7 @@ import { startGoalWorkflowFixture } from './goal-workflow-fixture';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const distEntry = path.join(repoRoot, 'dist', 'index.js');
-const hostVersion = process.env.OMOS_HOST_SMOKE_VERSION?.trim() || '1.18.13';
+const hostVersion = process.env.OMOS_HOST_SMOKE_VERSION?.trim() || '1.18.29';
 
 function fail(message: string): never {
   throw new Error(message);

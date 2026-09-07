@@ -81,8 +81,8 @@
     "@ast-grep/cli": "^0.44.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@mozilla/readability": "^0.6.0",
-    "@opencode-ai/plugin": "1.18.13",
-    "@opencode-ai/sdk": "1.18.13",
+    "@opencode-ai/plugin": "1.18.29",
+    "@opencode-ai/sdk": "1.18.29",
     "jsdom": "^29.0.0",
     "lru-cache": "^11.5.2",
     "turndown": "^7.2.4"

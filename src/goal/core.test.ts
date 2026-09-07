@@ -338,6 +338,76 @@ describe('GoalCore', () => {
     expect(readFileSync(`${store.statePath}.v3.backup`, 'utf8')).toBe(legacy);
   });
 
+  test('fails closed without mutating legacy state when migration is disabled', () => {
+    const root = mkdtempSync(join(tmpdir(), 'omos-goal-'));
+    roots.push(root);
+
+    for (const version of [1, 2, 3]) {
+      const sessionID = `legacy-v${version}`;
+      const store = new GoalStore(sessionID, { root });
+      mkdirSync(dirname(store.statePath), { recursive: true });
+      const legacy = JSON.stringify({
+        version,
+        goal: { evidence: [`legacy-v${version}`] },
+      });
+      writeFileSync(store.statePath, legacy, 'utf8');
+      const entriesBefore = readdirSync(dirname(store.statePath)).sort();
+      const runtime = createGoalRuntime(sessionID, {
+        root,
+        migrateLegacyOnRead: false,
+      });
+
+      expect(() => runtime.commands.readSnapshot()).toThrow(
+        GoalStateCorruptError,
+      );
+      expect(readFileSync(store.statePath, 'utf8')).toBe(legacy);
+      expect(existsSync(`${store.statePath}.v${version}.backup`)).toBe(false);
+      expect(existsSync(`${store.statePath}.lock`)).toBe(false);
+      expect(readdirSync(dirname(store.statePath)).sort()).toEqual(
+        entriesBefore,
+      );
+    }
+  });
+
+  test('reads current state through a live lock without modifying files', async () => {
+    const { core, root, store } = testCore('read-only-current');
+    await createGoal(core);
+    const lockPath = `${store.statePath}.lock`;
+    const lock = JSON.stringify({
+      pid: process.pid,
+      acquiredAt: Date.now(),
+      token: 'live-owner',
+    });
+    writeFileSync(lockPath, lock, 'utf8');
+    const state = readFileSync(store.statePath, 'utf8');
+    const entriesBefore = readdirSync(dirname(store.statePath)).sort();
+    const runtime = createGoalRuntime('read-only-current', {
+      root,
+      migrateLegacyOnRead: false,
+    });
+
+    expect(runtime.commands.readSnapshot()).toMatchObject({ state: 'goal' });
+    expect(readFileSync(store.statePath, 'utf8')).toBe(state);
+    expect(readFileSync(lockPath, 'utf8')).toBe(lock);
+    expect(readdirSync(dirname(store.statePath)).sort()).toEqual(entriesBefore);
+  });
+
+  test('reads missing state without creating storage directories', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'omos-goal-'));
+    roots.push(parent);
+    const root = join(parent, 'missing-data-root');
+    const runtime = createGoalRuntime('read-only-missing', {
+      root,
+      migrateLegacyOnRead: false,
+    });
+
+    expect(runtime.commands.readSnapshot()).toEqual({
+      apiVersion: 1,
+      state: 'no-goal',
+    });
+    expect(existsSync(root)).toBe(false);
+  });
+
   test('fails closed for malformed lock contents without reclaiming them', async () => {
     const { core, store } = testCore();
     const lockPath = `${store.statePath}.lock`;

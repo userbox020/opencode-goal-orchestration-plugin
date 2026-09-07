@@ -20,13 +20,14 @@ orchestration to the oh-my-opencode-slim specialist workflow.
 - Completion based only on assigned, canonically reconciled verifier evidence.
 - Scheduler wake and recovery support for continuing incomplete work.
 - Commands to pause, resume, revise, or cancel the current Goal.
+- A compact, native, read-only Goal status card in the local OpenCode TUI.
 - A localhost-only, read-only browser panel for criteria and progress.
 
 ## Prerequisites
 
 - Git
 - Bun — validated baseline: **1.4.1**
-- OpenCode V1 — tested version: **1.18.13**
+- OpenCode V1 — tested version: **1.18.29**
 
 Goal runtime observation is not available in the OpenCode V2 plugin host.
 
@@ -156,7 +157,21 @@ remains historical proof, but does not authorize new runtime work.
 Paused Goals retain terminal observations for already launched tasks. Evidence
 received while paused is audited when the Goal resumes.
 
-## Goal Panel Security
+## Goal Status Surfaces
+
+In a local OpenCode TUI, the sidebar shows a compact read-only card for the
+selected session's Goal, including its lifecycle, verified progress, and
+criterion statuses. It refreshes on the TUI's one-second status cycle and has no
+controls. Sessions without a readable Goal state show no Goal card.
+
+The native TUI card reads only when OpenCode reports the same state root as the
+TUI's local OpenCode data root. Mismatched roots are suppressed and show no Goal
+card. Remote attach remains unsupported: OpenCode 1.18.29 exposes no reliable
+remote flag, so a remote host reporting an identical path string cannot be
+distinguished from the local host. Use the server-side `/goal panel` browser
+view when remote state must be authoritative.
+
+### Browser Panel Security
 
 The Goal panel:
 
@@ -169,7 +184,8 @@ The Goal panel:
 Run `/goal panel` again after reloading or navigating away from the panel. The
 memory-only token is intentionally not reusable through browser storage.
 
-Goal does not create or update an OpenCode Desktop status card.
+Native Goal cards remain unavailable in OpenCode Web and Desktop. The
+localhost-only browser panel remains available through `/goal panel`.
 
 ## Updating
 
@@ -189,7 +205,7 @@ also `false`. Leave auto-update disabled for this source fork.
 ## Compatibility and Limitations
 
 - Goal is available only in the OpenCode V1 plugin host.
-- The tested baseline is Bun **1.4.1** and OpenCode **1.18.13 V1**.
+- The tested baseline is Bun **1.4.1** and OpenCode **1.18.29 V1**.
 - Public `/goal` creation and revision commands create a generic required
   criterion. There is no public command syntax for supplying a custom criterion
   list.
@@ -197,7 +213,10 @@ also `false`. Leave auto-update disabled for this source fork.
 - The fork must replace upstream `oh-my-opencode-slim`; loading both creates
   conflicting plugin and command registrations.
 - Unfinished runtime evidence requires reconciliation again after restart.
-- The browser panel is read-only and is not a Desktop integration.
+- The native Goal card is local-TUI-only. Mismatched data roots show no card;
+  identical-path remote hosts cannot be reliably identified.
+- Web and Desktop have no native Goal card. The browser panel is read-only and
+  is not a Desktop integration.
 
 ## Verification Summary
 

@@ -1,15 +1,24 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { RGBA } from '@opentui/core';
+import { createRoot } from 'solid-js/dist/solid.js';
+import type { GoalSnapshot } from './goal/core';
+import { getOpenCodeDataDir } from './goal/store';
 import { readTmuxPane } from './multiplexer/tmux-pane-registry';
 import {
   type ActiveTmuxPaneRegistration,
+  createGoalCardResource,
+  createTuiPlugin,
+  type GoalSidebarCardModel,
   getContrastForeground,
   getSidebarAgentNames,
+  projectGoalSidebarCard,
   readCompactSidebar,
   readConfigInvalid,
+  readGoalSidebarCard,
+  resolveLocalGoalDataRoot,
   splitSidebarModelId,
   syncTmuxPaneRegistration,
   default as tuiPlugin,
@@ -25,6 +34,333 @@ function createSnapshot(overrides: Partial<TuiSnapshot> = {}): TuiSnapshot {
     ...overrides,
   };
 }
+
+function createGoalSnapshot(
+  status: 'active' | 'paused' | 'completed' | 'cancelled' = 'active',
+  objective = 'Ship a focused native Goal status card',
+): GoalSnapshot {
+  return {
+    apiVersion: 1,
+    state: 'goal',
+    goal: {
+      id: 'goal-1',
+      objective,
+      status,
+      revision: 1,
+      recordVersion: 1,
+      epoch: 1,
+      progress: { verified: 1, total: 3, percent: 33 },
+      criteria: [
+        { id: 'criterion-1', text: 'Typecheck passes', status: 'verified' },
+        { id: 'criterion-2', text: 'Visual review passes', status: 'pending' },
+        {
+          id: 'criterion-3',
+          text: 'Remote state must not leak',
+          status: 'contradicted',
+        },
+      ],
+    },
+  };
+}
+
+describe('native Goal sidebar card', () => {
+  test.each([
+    ['active', '●', 'active'],
+    ['paused', 'Ⅱ', 'paused'],
+    ['completed', '✓', 'completed'],
+    ['cancelled', '×', 'cancelled'],
+  ] as const)('projects %s lifecycle text and mark', (status, mark, tone) => {
+    const card = projectGoalSidebarCard(createGoalSnapshot(status));
+
+    expect(card?.heading).toBe('Goal');
+    expect(card?.lifecycle).toEqual({ label: status, mark, tone });
+    expect(card?.progress).toEqual({ verified: 1, total: 3, percent: 33 });
+    expect(card?.criteria).toEqual([
+      {
+        text: 'Typecheck passes',
+        label: 'verified',
+        mark: '✓',
+        tone: 'completed',
+      },
+      {
+        text: 'Visual review passes',
+        label: 'pending',
+        mark: '·',
+        tone: 'muted',
+      },
+      {
+        text: 'Remote state must not leak',
+        label: 'contradicted',
+        mark: '!',
+        tone: 'cancelled',
+      },
+    ]);
+  });
+
+  test('renders no card when the session has no Goal', () => {
+    expect(
+      readGoalSidebarCard('session-empty', 'C:/data', () => ({
+        apiVersion: 1,
+        state: 'no-goal',
+      })),
+    ).toBeUndefined();
+  });
+
+  test('truncates objective and criterion text without splitting emoji', () => {
+    const snapshot = createGoalSnapshot('active', `${'a'.repeat(90)}😀bc`);
+    if (snapshot.state === 'goal') {
+      snapshot.goal.criteria[0] = {
+        id: 'criterion-1',
+        text: `${'b'.repeat(94)}😀cd`,
+        status: 'verified',
+      };
+    }
+
+    const card = projectGoalSidebarCard(snapshot);
+
+    expect(card?.objective).toEndWith('😀…');
+    expect(card?.criteria[0]?.text).toEndWith('😀…');
+    expect(card?.objective).not.toContain('\uFFFD');
+    expect(card?.criteria[0]?.text).not.toContain('\uFFFD');
+  });
+
+  test('slot reads its session_id and switching A to B cannot show A', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omos-tui-goal-'));
+    const reads: string[] = [];
+    const reader = (sessionID: string) => {
+      reads.push(sessionID);
+      return createGoalSnapshot(
+        'active',
+        sessionID === 'session-a' ? 'Objective A' : 'Objective B',
+      );
+    };
+    let slot:
+      | ((
+          context: { theme: { current: Record<string, unknown> } },
+          props: { session_id: string },
+        ) => unknown)
+      | undefined;
+    const disposers: Array<() => void | Promise<void>> = [];
+    let disposeCardA = () => {};
+    let disposeCardB = () => {};
+    const plugin = createTuiPlugin(
+      reader,
+      (_snapshot, _version, _theme, _invalid, _compact, goalCard) =>
+        goalCard as never,
+    );
+
+    try {
+      await plugin.tui(
+        {
+          state: {
+            ready: true,
+            path: {
+              directory: tempDir,
+              state: getOpenCodeDataDir(),
+            },
+          },
+          route: { current: { name: 'home' } },
+          lifecycle: {
+            onDispose: (dispose: () => void | Promise<void>) => {
+              disposers.push(dispose);
+              return () => {};
+            },
+          },
+          renderer: { requestRender: () => {} },
+          slots: {
+            register: (registration: {
+              slots: { sidebar_content?: typeof slot };
+            }) => {
+              slot = registration.slots.sidebar_content;
+              return 'slot-id';
+            },
+          },
+          theme: { current: {} },
+        } as unknown as Parameters<typeof plugin.tui>[0],
+        {},
+        { version: 'test' } as Parameters<typeof plugin.tui>[2],
+      );
+
+      const context = { theme: { current: {} } };
+      const cardA = createRoot((dispose) => {
+        disposeCardA = dispose;
+        return slot?.(context, {
+          session_id: 'session-a',
+        }) as () => GoalSidebarCardModel | undefined;
+      });
+      const cardB = createRoot((dispose) => {
+        disposeCardB = dispose;
+        return slot?.(context, {
+          session_id: 'session-b',
+        }) as () => GoalSidebarCardModel | undefined;
+      });
+
+      expect(reads).toEqual(['session-a', 'session-b']);
+      expect(cardA()?.objective).toBe('Objective A');
+      expect(cardB()?.objective).toBe('Objective B');
+      expect(cardB()?.objective).not.toBe(cardA()?.objective);
+    } finally {
+      disposeCardA();
+      disposeCardB();
+      for (const dispose of disposers) await dispose();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('same-session resource updates, disappears, and cleans its timer', () => {
+    let snapshot: unknown = createGoalSnapshot('active', 'First objective');
+    let tick: (() => void) | undefined;
+    const timerHandle = { id: 'goal-refresh' };
+    const clearIntervalSpy = mock(() => {});
+    const setIntervalSpy = mock((callback: () => void, delay: number) => {
+      tick = callback;
+      expect(delay).toBe(1000);
+      return timerHandle as unknown as ReturnType<typeof setInterval>;
+    });
+    let disposeRoot = () => {};
+
+    const resource = createRoot((dispose) => {
+      disposeRoot = dispose;
+      return createGoalCardResource({
+        sessionID: 'same-session',
+        getDataRoot: () => 'C:/data',
+        readSnapshot: () => snapshot,
+        setInterval: setIntervalSpy as unknown as typeof setInterval,
+        clearInterval: clearIntervalSpy as unknown as typeof clearInterval,
+      });
+    });
+
+    try {
+      expect(resource.current()?.objective).toBe('First objective');
+
+      snapshot = createGoalSnapshot('paused', 'Revised objective');
+      tick?.();
+      expect(resource.current()?.objective).toBe('Revised objective');
+      expect(resource.current()?.lifecycle.label).toBe('paused');
+
+      snapshot = { apiVersion: 1, state: 'no-goal' };
+      tick?.();
+      expect(resource.current()).toBeUndefined();
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      disposeRoot();
+    }
+
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(clearIntervalSpy).toHaveBeenCalledWith(timerHandle);
+  });
+
+  test('fails closed for read errors and corrupt snapshots', () => {
+    expect(
+      readGoalSidebarCard('locked', 'C:/data', () => {
+        throw new Error('state is locked');
+      }),
+    ).toBeUndefined();
+    expect(
+      readGoalSidebarCard('corrupt', 'C:/data', () => ({
+        apiVersion: 1,
+        state: 'goal',
+        goal: { objective: '<broken>' },
+      })),
+    ).toBeUndefined();
+  });
+});
+
+describe('native Goal durable read boundary', () => {
+  test('reads only when TUI state is ready and roots match', () => {
+    const localRoot = path.resolve('C:/local-opencode-state');
+    const matchingState = {
+      ready: true,
+      path: { state: path.join(localRoot, 'nested', '..') },
+    };
+    const mismatchedState = {
+      ready: true,
+      path: { state: path.resolve('C:/remote-opencode-state') },
+    };
+    const reader = mock(() => ({ apiVersion: 1, state: 'no-goal' }));
+    const noTimer = (() => 1) as unknown as typeof setInterval;
+    const clearTimer = (() => {}) as typeof clearInterval;
+    let disposeMatching = () => {};
+    let disposeMismatch = () => {};
+
+    const matching = createRoot((dispose) => {
+      disposeMatching = dispose;
+      return createGoalCardResource({
+        sessionID: 'matching-session',
+        getDataRoot: () => resolveLocalGoalDataRoot(matchingState, localRoot),
+        readSnapshot: reader,
+        setInterval: noTimer,
+        clearInterval: clearTimer,
+      });
+    });
+    const mismatch = createRoot((dispose) => {
+      disposeMismatch = dispose;
+      return createGoalCardResource({
+        sessionID: 'mismatched-session',
+        getDataRoot: () => resolveLocalGoalDataRoot(mismatchedState, localRoot),
+        readSnapshot: reader,
+        setInterval: noTimer,
+        clearInterval: clearTimer,
+      });
+    });
+
+    try {
+      expect(matching.current()).toBeUndefined();
+      expect(mismatch.current()).toBeUndefined();
+      expect(reader).toHaveBeenCalledTimes(1);
+      expect(reader).toHaveBeenCalledWith('matching-session', localRoot);
+      expect(
+        resolveLocalGoalDataRoot(
+          { ready: false, path: { state: localRoot } },
+          localRoot,
+        ),
+      ).toBeUndefined();
+    } finally {
+      disposeMatching();
+      disposeMismatch();
+    }
+  });
+
+  test('legacy, corrupt, and migration-locked files fail softly without mutation', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omos-tui-durable-'));
+    const goalsDirectory = path.join(root, 'oh-my-opencode-slim', 'goals');
+    fs.mkdirSync(goalsDirectory, { recursive: true });
+
+    const legacySession = 'legacy-session';
+    const legacyPath = path.join(
+      goalsDirectory,
+      `${Buffer.from(legacySession).toString('base64url')}.json`,
+    );
+    const lockPath = `${legacyPath}.lock`;
+    const legacyContent = JSON.stringify({ version: 1, goal: null });
+    fs.writeFileSync(legacyPath, legacyContent);
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({
+        pid: process.pid,
+        acquiredAt: Date.now(),
+        token: 'held',
+      }),
+    );
+
+    const corruptSession = 'corrupt-session';
+    const corruptPath = path.join(
+      goalsDirectory,
+      `${Buffer.from(corruptSession).toString('base64url')}.json`,
+    );
+    fs.writeFileSync(corruptPath, '{broken');
+
+    try {
+      expect(readGoalSidebarCard(legacySession, root)).toBeUndefined();
+      expect(readGoalSidebarCard(corruptSession, root)).toBeUndefined();
+      expect(fs.readFileSync(legacyPath, 'utf8')).toBe(legacyContent);
+      expect(fs.existsSync(lockPath)).toBe(true);
+      expect(fs.readFileSync(corruptPath, 'utf8')).toBe('{broken');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('tui sidebar agents', () => {
   test('hides disabled agents when models are persisted explicitly', () => {
@@ -438,6 +774,25 @@ describe('dual-contract plugin module', () => {
     }
   });
 
+  test('secondary setup contract never reads or exposes Goal state', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omos-tui-v2-'));
+    const goalReader = mock(() => createGoalSnapshot());
+    const secondaryPlugin = createTuiPlugin(goalReader);
+    let cleanup: (() => void) | undefined;
+    try {
+      const { ctx, slotClaims } = createV2Context(tempDir);
+      cleanup = (await secondaryPlugin.setup(
+        ctx as unknown as V2Context,
+      )) as () => void;
+
+      expect(slotClaims).toHaveLength(1);
+      expect(goalReader).not.toHaveBeenCalled();
+    } finally {
+      cleanup?.();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test('setup returns early without registering a slot when disabled by env', async () => {
     process.env.OH_MY_OPENCODE_SLIM_DISABLE = '1';
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omos-tui-v2-'));
@@ -447,6 +802,72 @@ describe('dual-contract plugin module', () => {
 
       expect(slotClaims).toHaveLength(0);
       expect(cleanup).toBeUndefined();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('native TUI refresh lifecycle', () => {
+  let originalEnv: typeof process.env;
+  let originalSetInterval: typeof globalThis.setInterval;
+  let originalClearInterval: typeof globalThis.clearInterval;
+
+  beforeEach(() => {
+    originalEnv = { ...process.env };
+    delete process.env.OH_MY_OPENCODE_SLIM_DISABLE;
+    originalSetInterval = globalThis.setInterval;
+    originalClearInterval = globalThis.clearInterval;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  });
+
+  test('requests a render each second and clears its timer on disposal', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omos-tui-v1-'));
+    const timerHandle = 73 as unknown as ReturnType<typeof setInterval>;
+    let intervalMs: number | undefined;
+    let tick: (() => void | Promise<void>) | undefined;
+    const clearIntervalSpy = mock(() => {});
+    globalThis.setInterval = ((handler, timeout) => {
+      tick = handler as () => void | Promise<void>;
+      intervalMs = timeout;
+      return timerHandle;
+    }) as typeof setInterval;
+    globalThis.clearInterval = clearIntervalSpy as typeof clearInterval;
+
+    const requestRender = mock(() => {});
+    const disposers: Array<() => void | Promise<void>> = [];
+    try {
+      await createTuiPlugin(() => ({ apiVersion: 1, state: 'no-goal' })).tui(
+        {
+          state: { path: { directory: tempDir } },
+          route: { current: { name: 'home' } },
+          lifecycle: {
+            onDispose: (dispose: () => void | Promise<void>) => {
+              disposers.push(dispose);
+              return () => {};
+            },
+          },
+          renderer: { requestRender },
+          slots: { register: () => 'slot-id' },
+          theme: { current: {} },
+        } as unknown as Parameters<typeof tuiPlugin.tui>[0],
+        {},
+        { version: 'test' } as Parameters<typeof tuiPlugin.tui>[2],
+      );
+
+      expect(intervalMs).toBe(1000);
+      expect(tick).toBeDefined();
+      await tick?.();
+      expect(requestRender).toHaveBeenCalledTimes(1);
+
+      expect(disposers).toHaveLength(1);
+      await disposers[0]?.();
+      expect(clearIntervalSpy).toHaveBeenCalledWith(timerHandle);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

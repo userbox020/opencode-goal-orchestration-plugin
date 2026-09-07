@@ -64,6 +64,8 @@ export interface GoalStoreOptions {
   root?: string;
   /** Alias for root when callers name the data-root explicitly. */
   dataRoot?: string;
+  /** Retire known legacy state during reads. Disable for read-only snapshots. */
+  migrateLegacyOnRead?: boolean;
   lockTimeoutMs?: number;
   staleLockMs?: number;
   signal?: AbortSignal;
@@ -171,6 +173,7 @@ export class GoalStore {
   private readonly lockPath: string;
   private readonly lockTimeoutMs: number;
   private readonly staleLockMs: number;
+  private readonly migrateLegacyOnRead: boolean;
   private readonly signal?: AbortSignal;
 
   constructor(
@@ -192,6 +195,7 @@ export class GoalStore {
     this.lockPath = `${this.statePath}.lock`;
     this.lockTimeoutMs = options.lockTimeoutMs ?? LOCK_TIMEOUT_MS;
     this.staleLockMs = options.staleLockMs ?? STALE_LOCK_MS;
+    this.migrateLegacyOnRead = options.migrateLegacyOnRead ?? true;
     this.signal = options.signal;
   }
 
@@ -215,6 +219,11 @@ export class GoalStore {
         parsed.version > 0 &&
         parsed.version < GOAL_STATE_VERSION
       ) {
+        if (!this.migrateLegacyOnRead) {
+          throw new Error(
+            `Legacy Goal state version ${parsed.version} requires migration`,
+          );
+        }
         if (ownerToken) {
           this.retireLegacyState(parsed.version, content, ownerToken);
           return emptyState();

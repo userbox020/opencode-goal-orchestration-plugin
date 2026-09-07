@@ -4,8 +4,18 @@ Select **Goal** from the primary agent list when you want the active Goal to
 drive execution. It can inspect the project, coordinate bounded specialist
 work, reconcile task results, and verify the required criteria.
 
-Goal does not create, update, or show Desktop status cards. Desktop card
-integration is outside this plugin-only feature.
+For local OpenCode TUI sessions, the native sidebar shows a compact, read-only
+Goal card with the objective, lifecycle, verified progress, and criterion
+statuses. It refreshes on the TUI's one-second render cycle and has no controls.
+Sessions without a readable Goal state show no card. The card requires the TUI
+and plugin server to report the same OpenCode state root; mismatched roots are
+suppressed and show no Goal card. Remote attach is unsupported because OpenCode
+1.18.29 exposes no reliable remote flag. A remote host reporting an identical
+path string cannot be distinguished from the local host, so use the server-side
+`/goal panel` browser view when remote state must be authoritative.
+
+OpenCode Web and Desktop do not have native Goal cards. The plugin does not
+create, update, or show a Desktop status card.
 
 The first ordinary message you send with **Goal** selected automatically creates
 a durable orchestration goal if this session has no Goal. Existing active,
@@ -66,7 +76,7 @@ criterion-mismatched verdict markers fail closed and leave the Goal incomplete.
 
 `bun run build` produces the artifacts used by the package checks.
 `bun run verify:host-smoke` checks visible Goal registration and its execution
-prompt against a pinned OpenCode 1.18.13 host. `OMOS_HOST_SMOKE_VERSION` can
+prompt against a pinned OpenCode 1.18.29 host. `OMOS_HOST_SMOKE_VERSION` can
 select a separate compatibility target; it does not change the default baseline.
 
 `bun run verify:goal-workflow` uses the same packed artifact and real host with
